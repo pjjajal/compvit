@@ -20,7 +20,7 @@ from torchmetrics import Accuracy, MeanMetric
 from tqdm import tqdm
 
 from data.augment import new_data_aug_generator
-from data.imagenet import create_imagenet_dataset
+from data.dataset import create_imagenet_dataset
 
 # from models_new import CompressiveTransformerFactory
 # from models import CompReggyModels, CompReggyModelsv2, CompReggyModelsv3
