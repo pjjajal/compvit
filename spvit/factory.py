@@ -89,6 +89,7 @@ class SPViTFactory(Enum):
             "class_token": False,
             "global_pool": "avg",
             "pretrained_strict": False,
+            "init_values": 1e-4
         },
     )
 
@@ -100,6 +101,7 @@ class SPViTFactory(Enum):
             "class_token": False,
             "global_pool": "avg",
             "pretrained_strict": False,
+            "init_values": 1e-4
         },
     )
 
@@ -111,6 +113,7 @@ class SPViTFactory(Enum):
             "class_token": False,
             "global_pool": "avg",
             "pretrained_strict": False,
+            "init_values": 1e-4
         },
     )
 
