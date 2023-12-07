@@ -7,7 +7,7 @@ import torchvision.transforms as tvt
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageNet
 from omegaconf import OmegaConf
-from augment import new_data_aug_generator
+from .augment import new_data_aug_generator
 
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.data import create_transform

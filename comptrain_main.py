@@ -423,8 +423,8 @@ class TrainEval:
     def _create_datasets(self):
         args = self.args
 
-        self.train_dataset = create_imagenet_dataset("train", cache_dir=args.data_path)
-        self.val_dataset = create_imagenet_dataset("val", cache_dir=args.data_path)
+        self.train_dataset = create_imagenet_dataset("train", cache_dir=args.data_path, args=args)
+        self.val_dataset = create_imagenet_dataset("val", cache_dir=args.data_path, args=args)
 
         sampler_train = torch.utils.data.RandomSampler(self.train_dataset)
         sampler_val = torch.utils.data.SequentialSampler(self.val_dataset)
