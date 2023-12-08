@@ -53,6 +53,7 @@ class SPViT(VisionTransformer):
         window_size=4,
         # STGM location are the blocks that the STGM block overrides.
         stgm_locations=[5, 6],
+        bottleneck=True,
         **kwargs
     ):
         super().__init__(
@@ -85,10 +86,12 @@ class SPViT(VisionTransformer):
             block_fn,
             mlp_layer,
         )
-        # Set this manually because 
         use_fc_norm = global_pool == "avg" if fc_norm is None else fc_norm
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
+
+        # This is used to control if we want to bottleneck.
+        self.bottleneck = bottleneck
 
         # This is the number of transformer blocks the STGM
         # module uses.
@@ -111,6 +114,8 @@ class SPViT(VisionTransformer):
         self.norm = norm_layer(embed_dim) if not use_fc_norm else nn.Identity()
         self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
 
+        self.init_weights()
+
 
     def forward_features(self, x):
         x = self.patch_embed(x)
@@ -121,7 +126,7 @@ class SPViT(VisionTransformer):
             x = checkpoint_seq(self.blocks, x)
         else:
             for i, block in enumerate(self.blocks):
-                if i in self.stgm_locations:
+                if i in self.stgm_locations and self.bottleneck:
                     if i == self.stgm_locations[0]:
                         x = self.stgm(x)
                     else:
@@ -153,4 +158,7 @@ class SPViT(VisionTransformer):
 if __name__ == "__main__":
     spvit = SPViT()
     print(spvit)
-    print(spvit(torch.randn(1,3, 224, 224)).shape)
+    print(spvit.forward_features(torch.randn(1,3, 224, 224)).shape)
+    spvit.bottleneck = False
+    print(spvit.forward_features(torch.randn(1,3, 224, 224)).shape)
+

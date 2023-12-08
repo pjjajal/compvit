@@ -163,21 +163,27 @@ class STGM(nn.Module):
         )
 
         self.global_center = nn.Parameter(
-            torch.randn((1, self.num_semantic_tokens, dim)),
+            torch.zeros((1, self.num_semantic_tokens + 1, dim)),
             requires_grad=True,
         )
 
+    def init_weights(self):
+        nn.init.normal_(self.global_center, std=1e-6)
+
     def forward(self, x):
         B, N, C = x.shape
-        H = W = int(N ** (0.5))
+        H = W = int((N - 1) ** (0.5))
 
         # Computing S1
+        cls_token, x = x[:, :1], x[:, 1:]
         x = x.reshape((B, H, W, C)).permute(0, 3, 1, 2)
         spatial_initial_center = F.adaptive_max_pool2d(x, (self.window_size))
         spatial_initial_center = spatial_initial_center.permute(0, 2, 3, 1).reshape(
             (B, -1, C)
         )
         x = x.permute(0, 2, 3, 1).reshape((B, -1, C))
+
+        spatial_initial_center = torch.cat([cls_token, spatial_initial_center], dim=1)
         s1 = self.block_1(x, spatial_initial_center)
 
         # Computing S2

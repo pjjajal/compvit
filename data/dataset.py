@@ -6,12 +6,12 @@ import torch
 import torchvision.transforms as tvt
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageNet
-from omegaconf import OmegaConf
 from .augment import new_data_aug_generator
 
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.data import create_transform
 from timm.data.transforms import RandomResizedCropAndInterpolation, ToNumpy, ToTensor
+
 
 def build_transform(is_train, args):
     resize_im = args.input_size > 32
@@ -30,15 +30,16 @@ def build_transform(is_train, args):
         if not resize_im:
             # replace RandomResizedCropAndInterpolation with
             # RandomCrop
-            transform.transforms[0] = tvt.RandomCrop(
-                args.input_size, padding=4)
+            transform.transforms[0] = tvt.RandomCrop(args.input_size, padding=4)
         return transform
 
     t = []
     if resize_im:
         size = int(args.input_size / args.eval_crop_ratio)
         t.append(
-            tvt.Resize(size, interpolation=3),  # to maintain same ratio w.r.t. 224 images
+            tvt.Resize(
+                size, interpolation=3
+            ),  # to maintain same ratio w.r.t. 224 images
         )
         t.append(tvt.CenterCrop(args.input_size))
 
@@ -47,10 +48,22 @@ def build_transform(is_train, args):
     return tvt.Compose(t)
 
 
-def create_imagenet_dataset(split: str, cache_dir: Path, args):
+def create_imagenet_dataset(split: str, cache_dir: Path, args, mae=False):
     if split == "train":
         # _transform = make_classification_train_transform()
-        _transform = build_transform(True, args)
+        if mae:
+            _transform = tvt.Compose(
+                [
+                    tvt.RandomResizedCrop(
+                        args.input_size, scale=(0.2, 1.0), interpolation=3
+                    ),  # 3 is bicubic
+                    tvt.RandomHorizontalFlip(),
+                    tvt.ToTensor(),
+                    tvt.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+                ]
+            )
+        else:
+            _transform = build_transform(True, args)
     elif split == "val":
         _transform = build_transform(False, args)
 
