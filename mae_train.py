@@ -19,7 +19,9 @@ from tqdm import tqdm
 
 from data.augment import new_data_aug_generator
 from data.dataset import create_imagenet_dataset
-from .spvit_mae import mae_factory, MAEViT
+from mae.spvit_mae import mae_factory, MAEViT
+
+torch.set_float32_matmul_precision("medium")
 
 
 def get_args_parser():
@@ -35,7 +37,14 @@ def get_args_parser():
     # Model parameters
     parser.add_argument(
         "--model",
-        default="mae_vit_large_patch16",
+        default="vit_tiny_patch16_224",
+        type=str,
+        metavar="MODEL",
+        help="Name of model to train",
+    )
+    parser.add_argument(
+        "--baseline_model",
+        default="vit_tiny_patch16_224",
         type=str,
         metavar="MODEL",
         help="Name of model to train",
@@ -47,6 +56,11 @@ def get_args_parser():
         type=Path,
         default=None,
     )
+    parser.add_argument("--input-size", default=224, type=int, help="images input size")
+    parser.add_argument("--window_size", default=6, type=int)
+    parser.add_argument("--bottleneck_location", default=6, type=int)
+    parser.add_argument("--stgm_location", default=[5,6],)
+
     # Parameters to optimize
     parser.add_argument(
         "--whole",
@@ -310,7 +324,7 @@ class TrainEval:
             )
             torch.save(self.model.state_dict(), checkpoint_path)
 
-    def train_epcoh(self, args):
+    def train_epoch(self, args):
         loss_mean = MeanMetric().to(device=self.fabric.device)
         self.model.train()
 
@@ -349,7 +363,8 @@ def main():
     )
 
     args.save_loc = save_loc
-
+    train_eval = TrainEval(args)
+    train_eval.train()
 
 if __name__ == "__main__":
     main()
