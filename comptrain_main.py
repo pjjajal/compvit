@@ -22,6 +22,7 @@ from data.dataset import create_imagenet_dataset
 
 # from models_new import CompressiveTransformerFactory
 # from models import CompReggyModels, CompReggyModelsv2, CompReggyModelsv3
+import spvit
 from spvit.factory import SPViTFactory
 
 torch.set_float32_matmul_precision("medium")
@@ -43,6 +44,7 @@ def get_args_parser():
         choices=SPViTFactory._member_names_,
         required=True,
     )
+    parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--input-size", default=224, type=int, help="images input size")
 
     parser.add_argument(
@@ -59,9 +61,10 @@ def get_args_parser():
         metavar="PCT",
         help="Drop path rate (default: 0.1)",
     )
+    parser.add_argument("--pretrained", default=False, action="store_true")
     parser.add_argument("--window_size", default=4, type=int)
     parser.add_argument("--bottleneck_location", default=6, type=int)
-    parser.add_argument("--registers", default=32, type=int)
+    # parser.add_argument("--registers", default=32, type=int)
 
     parser.add_argument("--model-ema", action="store_true")
     parser.add_argument("--no-model-ema", action="store_false", dest="model_ema")
@@ -93,8 +96,8 @@ def get_args_parser():
         default=False,
     )
     parser.add_argument(
-        "--train-comp",
-        dest="train_comp",
+        "--train-bottleneck",
+        dest="train_bottleneck",
         action="store_true",
         help="evaluate model on validation set",
         default=False,
@@ -409,11 +412,12 @@ class TrainEval:
         self.mixup_fn = self._create_mixup(args)
         self.model: torch.nn.Module = self._create_model(args)
         self.model = self.fabric.setup(self.model)
-        self._create_ema(args)
-        self.optimizer = self._create_optimizer(args)
-        self.optimizer = self.fabric.setup_optimizers(self.optimizer)
-        self.lr_scheduler, _ = create_scheduler(args, self.optimizer)
-        self.criterion = self._create_criterion(args)
+        if not args.eval:
+            self._create_ema(args)
+            self.optimizer = self._create_optimizer(args)
+            self.optimizer = self.fabric.setup_optimizers(self.optimizer)
+            self.lr_scheduler, _ = create_scheduler(args, self.optimizer)
+            self.criterion = self._create_criterion(args)
         self.data_loader_train, self.data_loader_val = self.fabric.setup_dataloaders(
             self.data_loader_train, self.data_loader_val
         )
@@ -477,15 +481,10 @@ class TrainEval:
         args = self.args
 
         # Create model
-        model_constructor, model_args = SPViTFactory[args.model].value
-        model_args["window_size"] = args.window_size
-        model_args["bottleneck_location"] = args.bottleneck_location
-        model_args["drop_rate"] = args.drop
-        model_args["drop_path_rate"] = args.drop_path
-        # model_args["drop_block_rate"] = None
-        model_args["img_size"] = args.input_size
-        model_args["registers"] = args.registers
-        model = model_constructor(**model_args)
+        if args.baseline:
+            model = create_model(args.model, True)
+        else:
+            model = spvit.create_model(model_name=args.model, window_size=args.window_size, stgm_location=[5,6], bottleneck=True, pretrained=args.pretrained)
 
         if args.checkpoint:
             model.load_state_dict(torch.load(args.checkpoint), strict=False)
@@ -510,7 +509,7 @@ class TrainEval:
             parameters = self.model.parameters()
         else:
             parameters = self.model.peft_parameters(
-                comp_blocks=args.train_comp, blocks=args.blocks
+                train_bottleneck=args.train_bottleneck, blocks=args.blocks
             )
 
         if args.head:
@@ -568,7 +567,7 @@ class TrainEval:
             )
             val_acc, val_loss = self.evaluate()
             logging.info(
-                f"epoch: {epoch}, validation accuracy: {val_acc:.2f}, val loss: {val_loss}"
+                f"epoch: {epoch}, validation accuracy: {val_acc:.2f}, val loss: {val_loss}, lr: {self.optimizer.param_groups[0]['lr']}"
             )
 
             checkpoint_path = args.save_loc / (

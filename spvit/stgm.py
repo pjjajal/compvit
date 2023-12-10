@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.vision_transformer import Attention, Block
+from timm.models.mlp_mixer import MixerBlock
 
 
 class SGTMAttn(Attention):
@@ -126,12 +127,28 @@ class STGM(nn.Module):
         norm_layer=nn.LayerNorm,
         mlp_layer=Mlp,
         window_size=4,
+        num_patches=196,
         *args,
         **kwargs
     ) -> None:
         super().__init__(*args, **kwargs)
         self.window_size = window_size
+        self.num_patches = num_patches
         self.num_semantic_tokens = window_size * window_size
+
+        # self.s1_mixer = MixerBlock(dim, self.num_semantic_tokens)
+        # self.s2_mixer = MixerBlock(dim, self.num_semantic_tokens)
+        # self.conv1 = nn.Sequential(
+        #     nn.Conv1d(self.num_patches, self.num_semantic_tokens),
+        #     nn.GELU(),
+        # )
+
+        self.bottleneck = nn.Sequential(
+            MixerBlock(dim, self.num_patches),
+            nn.Conv1d(self.num_patches, self.num_semantic_tokens, 1),
+            nn.GELU(),
+            MixerBlock(dim, self.num_semantic_tokens),
+        )
 
         self.block_1 = TransformerBlock(
             dim,
@@ -163,7 +180,7 @@ class STGM(nn.Module):
         )
 
         self.global_center = nn.Parameter(
-            torch.zeros((1, self.num_semantic_tokens + 1, dim)),
+            torch.zeros((1, self.num_semantic_tokens, dim)),
             requires_grad=True,
         )
 
@@ -175,15 +192,17 @@ class STGM(nn.Module):
         H = W = int((N - 1) ** (0.5))
 
         # Computing S1
-        cls_token, x = x[:, :1], x[:, 1:]
-        x = x.reshape((B, H, W, C)).permute(0, 3, 1, 2)
-        spatial_initial_center = F.adaptive_max_pool2d(x, (self.window_size))
-        spatial_initial_center = spatial_initial_center.permute(0, 2, 3, 1).reshape(
-            (B, -1, C)
-        )
-        x = x.permute(0, 2, 3, 1).reshape((B, -1, C))
+        # cls_token, x = x[:, :1], x[:, 1:]
+        # x = x.reshape((B, H, W, C)).permute(0, 3, 1, 2)
+        # spatial_initial_center = F.adaptive_avg_pool2d(x, (self.window_size))
+        # spatial_initial_center = spatial_initial_center.permute(0, 2, 3, 1).reshape(
+        #     (B, -1, C)
+        # )
+        # spatial_initial_center = self.s1_mixer(spatial_initial_center)
+        # x = x.permute(0, 2, 3, 1).reshape((B, -1, C))
+        spatial_initial_center = self.bottleneck(x)
 
-        spatial_initial_center = torch.cat([cls_token, spatial_initial_center], dim=1)
+        # spatial_initial_center = torch.cat([cls_token, spatial_initial_center], dim=1)
         s1 = self.block_1(x, spatial_initial_center)
 
         # Computing S2
@@ -194,10 +213,19 @@ class STGM(nn.Module):
 
 
 if __name__ == "__main__":
-    x = torch.randn((1, 196, 386))
+    x = torch.randn((1, 197, 768))
     print(x.shape)
+
+    window_size = 4
     B, N, C = x.shape
-    W = H = int(N ** (1 / 2))
-    x = x.reshape((B, H, W, C)).permute(0, 3, 1, 2)
+    # W = H = int(N ** (0.5))
+    # x = x.reshape((B, H, W, C)).permute(0, 3, 1, 2)
+
+    # xx = F.unfold(x, (6,6), stride=6)
+
     print(x.shape)
-    print(F.adaptive_max_pool2d(x, (4, 4)).shape)
+    # print(xx.reshape(B,C, 36, -1).shape)
+    # print(F.adaptive_max_pool2d(x, (4, 4)).shape)
+
+    stgm = STGM(768, 12, window_size=4)
+    stgm(x)

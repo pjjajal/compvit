@@ -1,3 +1,4 @@
+import time
 import timm
 import torch
 import torch.nn as nn
@@ -6,6 +7,7 @@ from timm.layers import trunc_normal_
 
 import spvit
 from spvit.spvit_model import SPViT
+from timm.models.vision_transformer import Block
 
 
 class MAEViT(nn.Module):
@@ -36,7 +38,7 @@ class MAEViT(nn.Module):
             torch.zeros((1, 1, decoder_embed_dim)), requires_grad=True
         )
         self.decoder_pos_embed = nn.Parameter(
-            torch.zeros((1, self.num_patches, decoder_embed_dim)),
+            torch.zeros((1, self.num_patches + 1, decoder_embed_dim)),
             requires_grad=True,
         )
 
@@ -79,10 +81,13 @@ class MAEViT(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def training_parameters(self):
+    def training_parameters(self, whole=False, train_bottleneck = False, blocks=False):
         parameters = []
 
-        parameters.extend(self.encoder.parameters())
+        if whole:
+            parameters.extend(self.encoder.parameters())
+        else:
+            parameters.extend(self.encoder.peft_parameters(train_bottleneck=train_bottleneck, blocks=blocks))
         parameters.extend(self.decoder.parameters())
         parameters.extend(self.decoder_embed.parameters())
         parameters.extend(self.decoder_pred.parameters())
@@ -92,7 +97,7 @@ class MAEViT(nn.Module):
 
         return parameters
 
-    @torch.no_grad
+    @torch.no_grad()
     def forward_baseline(self, x):
         baseline_outputs = self.baseline.forward_features(x)
         return baseline_outputs
@@ -105,7 +110,7 @@ class MAEViT(nn.Module):
         B, _, _ = encoder_outputs.shape
 
         # Create mask tokens
-        mask_tokens = self.mask_token.repeat(B, self.num_patches, 1)
+        mask_tokens = self.mask_token.repeat(B, self.num_patches + 1, 1)
         mask_tokens = mask_tokens + self.decoder_pos_embed
 
         # Project encoder output embedding dim to decoder
@@ -133,6 +138,7 @@ class MAEViT(nn.Module):
     def forward(self, x):
         baseline_outputs = self.forward_baseline(x)
         encoder_outputs = self.forward_encoder(x)
+        start = time.time()
         decoder_outputs = self.forward_decoder(encoder_outputs)
         loss = self.forward_loss(baseline_outputs, decoder_outputs)
         return loss
@@ -159,6 +165,7 @@ def mae_factory(
         window_size=window_size,
         stgm_location=stgm_location,
         bottleneck=bottleneck,
+        pretrained=False
     )
 
     # Decoder
@@ -171,9 +178,16 @@ def mae_factory(
         layer_norm_eps=1e-5,
         batch_first=True,
         norm_first=True,
-        bias=True,
     )
     decoder = nn.TransformerDecoder(decoder_layer, decoder_depth)
+
+    # decoder = nn.Sequential(*[Block(
+    #     dim=decoder_embed_dim,
+    #     num_heads=decoder_num_heads,
+    #     mlp_ratio=mlp_ratio,
+    #     act_layer=nn.GELU,
+    #     init_values=1e-6,
+    # ) for i in range(decoder_depth)])
 
     return MAEViT(
         baseline,

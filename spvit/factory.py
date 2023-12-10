@@ -152,7 +152,7 @@ class SPViTFactory(Enum):
         vit_tiny_patch16_224,
         {
             "pretrained": True,
-            "class_token": True,
+            "class_token": False,
             "global_pool": "avg",
             "pretrained_strict": False,
         },
@@ -172,7 +172,7 @@ class SPViTFactory(Enum):
         vit_base_patch16_224,
         {
             "pretrained": True,
-            "class_token": True,
+            "class_token": False,
             "global_pool": "avg",
             "pretrained_strict": False,
         },
@@ -182,7 +182,7 @@ class SPViTFactory(Enum):
         vit_large_patch16_224,
         {
             "pretrained": True,
-            "class_token": True,
+            "class_token": False,
             "global_pool": "avg",
             "pretrained_strict": False,
         },
@@ -193,7 +193,7 @@ class SPViTFactory(Enum):
         deit3_small_patch16_224,
         {
             "pretrained": True,
-            "class_token": True,
+            "class_token": False,
             "global_pool": "avg",
             "pretrained_strict": False,
             "init_values": 1e-4,
@@ -205,7 +205,7 @@ class SPViTFactory(Enum):
         deit3_base_patch16_224,
         {
             "pretrained": True,
-            "class_token": True,
+            "class_token": False,
             "global_pool": "avg",
             "pretrained_strict": False,
             "init_values": 1e-4,
@@ -217,7 +217,7 @@ class SPViTFactory(Enum):
         deit3_large_patch16_224,
         {
             "pretrained": True,
-            "class_token": True,
+            "class_token": False,
             "global_pool": "avg",
             "pretrained_strict": False,
             "init_values": 1e-4,
@@ -225,11 +225,12 @@ class SPViTFactory(Enum):
     )
 
 
-def create_model(model_name, window_size=4, stgm_location=[5, 6], bottleneck=True):
+def create_model(model_name, window_size=4, stgm_location=[5, 6], bottleneck=True, pretrained=True):
     constructor, args = SPViTFactory[model_name].value
     args["window_size"] = window_size
     args["stgm_location"] = stgm_location
     args["bottleneck"] = bottleneck
+    args["pretrained"] = pretrained
     spvit = constructor(**args)
 
     return spvit

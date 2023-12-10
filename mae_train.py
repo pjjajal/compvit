@@ -56,15 +56,46 @@ def get_args_parser():
         type=Path,
         default=None,
     )
+    parser.add_argument(
+        "--checkpoint_opt",
+        dest="checkpoint_opt",
+        help="optimizer checkpoint name",
+        type=Path,
+        default=None,
+    )
+    parser.add_argument(
+        "--checkpoint_sched",
+        dest="checkpoint_sched",
+        help="scheduler checkpoint name",
+        type=Path,
+        default=None,
+    )
     parser.add_argument("--input-size", default=224, type=int, help="images input size")
     parser.add_argument("--window_size", default=6, type=int)
     parser.add_argument("--bottleneck_location", default=6, type=int)
-    parser.add_argument("--stgm_location", default=[5,6],)
+    parser.add_argument(
+        "--stgm_location",
+        default=[5, 6],
+    )
 
     # Parameters to optimize
     parser.add_argument(
         "--whole",
         dest="whole",
+        action="store_true",
+        help="evaluate model on validation set",
+        default=False,
+    )
+    parser.add_argument(
+        "--blocks",
+        dest="blocks",
+        action="store_true",
+        help="evaluate model on validation set",
+        default=False,
+    )
+    parser.add_argument(
+        "--train-bottleneck",
+        dest="train_bottleneck",
         action="store_true",
         help="evaluate model on validation set",
         default=False,
@@ -236,6 +267,7 @@ class TrainEval:
         self.args = args
         self.fabric = Fabric(precision="bf16-mixed")
         self.fabric.launch()
+        print(self.fabric.device)
         self.data_loader_train, self.data_loader_val = self._create_datasets()
         self.model: MAEViT = self._create_model(args)
         self.model = self.fabric.setup(self.model)
@@ -287,7 +319,15 @@ class TrainEval:
 
         # Create model
         mae = mae_factory(
-            args.model, args.baseline_model, args.window_size, args.stgm_location, True
+            model=args.model,
+            baseline_model=args.baseline_model,
+            window_size=args.window_size,
+            stgm_location=args.stgm_location,
+            bottleneck=True,
+            decoder_embed_dim=192,
+            decoder_depth=8,
+            decoder_num_heads=3,
+            mlp_ratio=4,
         )
 
         if args.checkpoint:
@@ -300,29 +340,32 @@ class TrainEval:
         # Create optimizer
         parameters = []
         if args.whole:
-            parameters = self.model.training_parameters()
+            parameters = self.model.training_parameters(whole=args.whole)
+        else:
+            parameters = self.model.training_parameters(whole=args.whole, train_bottleneck=args.train_bottleneck, blocks=args.blocks)
 
         parameters = torch.nn.ParameterList(parameters)
         return create_optimizer(args, parameters)
-    
 
     def train(self):
         args = self.args
         logging.info(f"{args}")
         for epoch in tqdm(range(args.epochs)):
-            # Train
+            # # Train
             losses = self.train_epoch(args)
             # Scheduler Step
             self.lr_scheduler.step(epoch)
             # Log loss
             logging.info(
-                f"Epoch {epoch}: {' '.join([f'{key}: {val}' for key, val in losses.items()])}"
+                f"Epoch {epoch}: {' '.join([f'{key}: {val}' for key, val in losses.items()])}, lr: {self.optimizer.param_groups[0]['lr']}"
             )
             # Create checkpoint
             checkpoint_path = args.save_loc / (
                 f"epoch{epoch}" + f"ws{args.window_size}bl{args.bottleneck_location}.pt"
             )
             torch.save(self.model.state_dict(), checkpoint_path)
+            torch.save(self.lr_scheduler.state_dict(), f"{args.save_loc}/scheduler.pt")
+            torch.save(self.optimizer.state_dict(), f"{args.save_loc}/optimizer.pt")
 
     def train_epoch(self, args):
         loss_mean = MeanMetric().to(device=self.fabric.device)
@@ -365,6 +408,7 @@ def main():
     args.save_loc = save_loc
     train_eval = TrainEval(args)
     train_eval.train()
+
 
 if __name__ == "__main__":
     main()

@@ -95,6 +95,7 @@ class SPViT(VisionTransformer):
 
         # This is the number of transformer blocks the STGM
         # module uses.
+        # Fix the index.
         self.stgm_locations = [i - 1 for i in stgm_locations]
         self.stgm = STGM(
             embed_dim,
@@ -110,9 +111,13 @@ class SPViT(VisionTransformer):
             norm_layer,
             mlp_layer,
             window_size=window_size,
+            num_patches=self.patch_embed.num_patches
         )
         self.norm = norm_layer(embed_dim) if not use_fc_norm else nn.Identity()
         self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
+
+        for i in self.stgm_locations:
+            self.blocks[i] = None
 
         self.init_weights()
 
@@ -153,12 +158,27 @@ class SPViT(VisionTransformer):
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
+    
+    def peft_parameters(self, train_bottleneck=False, blocks=False):
+        parameters = []
+
+        if train_bottleneck:
+            parameters.extend(self.stgm.parameters())
+
+        if blocks:
+            print("Training post-bottleneck Blocks")
+            for i, block in enumerate(self.blocks):
+                if i > self.stgm_locations[-1]:
+                    parameters.extend(block.parameters())
+
+        return parameters
+
 
 
 if __name__ == "__main__":
     spvit = SPViT()
     print(spvit)
-    print(spvit.forward_features(torch.randn(1,3, 224, 224)).shape)
-    spvit.bottleneck = False
-    print(spvit.forward_features(torch.randn(1,3, 224, 224)).shape)
+    # print(spvit.forward_features(torch.randn(1,3, 224, 224)).shape)
+    # spvit.bottleneck = False
+    # print(spvit.forward_features(torch.randn(1,3, 224, 224)).shape)
 
