@@ -134,7 +134,7 @@ class STGM(nn.Module):
         super().__init__(*args, **kwargs)
         self.window_size = window_size
         self.num_patches = num_patches
-        self.num_semantic_tokens = window_size * window_size
+        self.num_semantic_tokens = window_size
 
         # self.s1_mixer = MixerBlock(dim, self.num_semantic_tokens)
         # self.s2_mixer = MixerBlock(dim, self.num_semantic_tokens)
