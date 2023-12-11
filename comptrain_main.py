@@ -396,6 +396,9 @@ def get_args_parser():
     )
     parser.add_argument("--no-pin-mem", action="store_false", dest="pin_mem", help="")
     parser.set_defaults(pin_mem=True)
+    parser.add_argument("--fabric-num-gpus", type=int, default=1)
+    parser.add_argument("--fabric-num-nodes", type=int, default=1)
+    parser.add_argument("--fabric-strategy", type=str, default="ddp")
 
     return parser
 
@@ -405,7 +408,12 @@ class TrainEval:
         print(args)
 
         self.args = args
-        self.fabric = Fabric(precision="bf16-mixed")
+        self.fabric = Fabric(
+            strategy=args.fabric_strategy,
+            precision="bf16-mixed",
+            devices=args.fabric_num_gpus,
+            num_nodes=args.fabric_num_nodes,
+        )
         self.fabric.launch()
 
         self.data_loader_train, self.data_loader_val = self._create_datasets()
@@ -484,7 +492,13 @@ class TrainEval:
         if args.baseline:
             model = create_model(args.model, True)
         else:
-            model = spvit.create_model(model_name=args.model, window_size=args.window_size, stgm_location=[5,6], bottleneck=True, pretrained=args.pretrained)
+            model = spvit.create_model(
+                model_name=args.model,
+                window_size=args.window_size,
+                stgm_location=[5, 6],
+                bottleneck=True,
+                pretrained=args.pretrained,
+            )
 
         if args.checkpoint:
             model.load_state_dict(torch.load(args.checkpoint), strict=False)
