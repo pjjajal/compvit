@@ -25,6 +25,7 @@ from data.dataset import create_imagenet_dataset
 import spvit
 from spvit.factory import SPViTFactory
 
+torch.backends.cudnn.benchmark = True
 torch.set_float32_matmul_precision("medium")
 
 
@@ -409,7 +410,7 @@ class TrainEval:
 
         self.args = args
         self.fabric = Fabric(
-            strategy=args.fabric_strategy,
+            # strategy=args.fabric_strategy,
             precision="bf16-mixed",
             devices=args.fabric_num_gpus,
             num_nodes=args.fabric_num_nodes,
@@ -419,6 +420,7 @@ class TrainEval:
         self.data_loader_train, self.data_loader_val = self._create_datasets()
         self.mixup_fn = self._create_mixup(args)
         self.model: torch.nn.Module = self._create_model(args)
+        self.model = torch.compile(self.model)
         self.model = self.fabric.setup(self.model)
         if not args.eval:
             self._create_ema(args)
