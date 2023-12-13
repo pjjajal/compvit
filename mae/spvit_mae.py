@@ -126,6 +126,10 @@ class MAEViT(nn.Module):
         # Project decoder embed dim to baseline embed dim
         decoder_outputs = self.decoder_pred(decoder_outputs)
 
+        mean = baseline_outputs.mean(dim=-1, keepdim=True)
+        var = baseline_outputs.var(dim=-1, keepdim=True)
+        target = (baseline_outputs - mean) / (var + 1.e-6)**.5
+
         # L2 norm over dim
         loss = (baseline_outputs - decoder_outputs).norm(p=2, dim=-1)
         # Average over tokens

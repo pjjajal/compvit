@@ -484,8 +484,8 @@ class TrainEval:
         if args.baseline:
             model = create_model(args.model, True)
         else:
-            model = spvit.create_model(model_name=args.model, window_size=args.window_size, stgm_location=[5,6], bottleneck=True, pretrained=args.pretrained)
-
+            model = spvit.create_model(model_name=args.model, window_size=args.window_size, stgm_location=[11,12], bottleneck=True, pretrained=args.pretrained)
+        print(model)
         if args.checkpoint:
             model.load_state_dict(torch.load(args.checkpoint), strict=False)
 
@@ -584,7 +584,7 @@ class TrainEval:
         if args.cosub:
             criterion = torch.nn.BCEWithLogitsLoss()
 
-        for samples, targets in tqdm(self.data_loader_train):
+        for i, (samples, targets) in enumerate(tqdm(self.data_loader_train)):
             if self.mixup_fn is not None:
                 samples, targets = self.mixup_fn(samples, targets)
 
@@ -608,8 +608,12 @@ class TrainEval:
                     outputs[1], outputs[0].detach().sigmoid()
                 )
 
+            is_accumulating = i % 8 != 0
+            loss = loss / 8
+
             self.fabric.backward(loss)
-            self.optimizer.step()
+            if not is_accumulating:
+                self.optimizer.step()
 
             loss_mean(loss)
 
