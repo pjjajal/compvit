@@ -228,7 +228,7 @@ class SPViTFactory(Enum):
 def create_model(model_name, window_size=4, stgm_location=[5, 6], bottleneck=True, pretrained=True):
     constructor, args = SPViTFactory[model_name].value
     args["window_size"] = window_size
-    args["stgm_location"] = stgm_location
+    args["stgm_locations"] = stgm_location
     args["bottleneck"] = bottleneck
     args["pretrained"] = pretrained
     spvit = constructor(**args)
