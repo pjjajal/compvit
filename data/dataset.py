@@ -1,11 +1,12 @@
 from pathlib import Path
 from typing import Sequence
+import os
 
 import numpy as np
 import torch
 import torchvision.transforms as tvt
 from torch.utils.data import DataLoader
-from torchvision.datasets import ImageNet
+from torchvision.datasets import ImageNet, ImageFolder
 from .augment import new_data_aug_generator
 
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
@@ -67,9 +68,12 @@ def create_imagenet_dataset(split: str, cache_dir: Path, args, mae=False):
     elif split == "val":
         _transform = build_transform(False, args)
 
-    dataset = ImageNet(cache_dir, split, transform=_transform)
-    return dataset
+    ### MINOR CHANGE
+    ### Do not use torchvision ImageNet - Instead use unzipped ImageNet1K with vanilla ImageFolder loading
+    #dataset = ImageNet(cache_dir, split, transform=_transform)
+    dataset  = ImageFolder(root=os.path.join(cache_dir, split), transform=_transform)
 
+    return dataset
 
 if __name__ == "__main__":
     dataset = create_imagenet_dataset("val", cache_dir="E:\datasets\imagenet")
