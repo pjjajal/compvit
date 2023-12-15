@@ -412,8 +412,8 @@ class TrainEval:
         self.fabric = Fabric(
             # strategy=args.fabric_strategy,
             precision="bf16-mixed",
-            devices=args.fabric_num_gpus,
-            num_nodes=args.fabric_num_nodes,
+            # devices=args.fabric_num_gpus,
+            # num_nodes=args.fabric_num_nodes,
         )
         self.fabric.launch()
 
@@ -497,9 +497,17 @@ class TrainEval:
             model = spvit.create_model(model_name=args.model, window_size=args.window_size, stgm_location=[11,12], bottleneck=True, pretrained=args.pretrained)
         print(model)
         if args.checkpoint:
-            model.load_state_dict(torch.load(args.checkpoint), strict=False)
+            print(f"Loading Checkpoint : {args.checkpoint}")
+            model.load_state_dict(self._get_checkpoint(args.checkpoint), strict=False)
 
         return model
+    
+    def _get_checkpoint(self, path):
+        checkpoint = torch.load(path, )
+        for old_key in list(checkpoint.keys()):
+            new_key = old_key.replace("_orig_mod.", "")
+            checkpoint[new_key] = checkpoint.pop(old_key)
+        return checkpoint
 
     def _create_ema(self, args):
         self.model_ema = None
@@ -557,10 +565,10 @@ class TrainEval:
                 output = self.model(images)
                 loss = criterion(output, target)
                 accuracy(output, target)
-                loss_mean(loss)
+                loss_mean(loss.item())
             total_accuracy = accuracy.compute()
             mean_loss = loss_mean.compute()
-
+        torch.cuda.empty_cache()
         return total_accuracy, mean_loss
 
     def train(self):
@@ -618,21 +626,21 @@ class TrainEval:
                     outputs[1], outputs[0].detach().sigmoid()
                 )
 
-            is_accumulating = i % 8 != 0
+            is_accumulating = (i + 1) % 8 != 0
+            loss_mean(loss.item())
             loss = loss / 8
 
             self.fabric.backward(loss)
-            if not is_accumulating:
+            if not is_accumulating or (i + 1) == len(self.data_loader_train):
                 self.optimizer.step()
-
-            loss_mean(loss)
+                # self.optimizer.zero_grad()
 
             if self.model_ema is not None:
                 self.model_ema.update(self.model)
-
         losses = {
             "batch_loss": loss_mean.compute(),
         }
+        torch.cuda.empty_cache()
         return losses
 
 
