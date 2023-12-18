@@ -136,13 +136,6 @@ class STGM(nn.Module):
         self.num_patches = num_patches
         self.num_semantic_tokens = window_size
 
-        # self.s1_mixer = MixerBlock(dim, self.num_semantic_tokens)
-        # self.s2_mixer = MixerBlock(dim, self.num_semantic_tokens)
-        # self.conv1 = nn.Sequential(
-        #     nn.Conv1d(self.num_patches, self.num_semantic_tokens),
-        #     nn.GELU(),
-        # )
-
         self.bottleneck = nn.Sequential(
             MixerBlock(dim, self.num_patches),
             nn.Conv1d(self.num_patches, self.num_semantic_tokens, 1),

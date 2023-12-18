@@ -52,7 +52,9 @@ def vit_large_patch16_224(pretrained=False, **kwargs) -> SPViT:
     return model
 
 
-def _create_vision_transformer(variant, pretrained=False, **kwargs):
+def _create_vision_transformer(
+    variant: str, pretrained: bool = False, **kwargs
+) -> SPViT:
     if kwargs.get("features_only", None):
         raise RuntimeError(
             "features_only not implemented for Vision Transformer models."
@@ -67,13 +69,31 @@ def _create_vision_transformer(variant, pretrained=False, **kwargs):
     else:
         _filter_fn = checkpoint_filter_fn
 
+    # FIXME attn pool (currently only in siglip) params removed if pool disabled, is there a better soln?
+    # strict = True
+    # if 'siglip' in variant and kwargs.get('global_pool', None) != 'map':
+    #     strict = False
+    strict = kwargs.pop("pretrained_strict")
+
     return build_model_with_cfg(
         SPViT,
         variant,
         pretrained,
         pretrained_filter_fn=_filter_fn,
+        pretrained_strict=strict,
         **kwargs,
     )
+
+
+def deit_tiny_patch16_224(pretrained=False, **kwargs) -> SPViT:
+    """DeiT-tiny model @ 224x224 from paper (https://arxiv.org/abs/2012.12877).
+    ImageNet-1k weights from https://github.com/facebookresearch/deit.
+    """
+    model_args = dict(patch_size=16, embed_dim=192, depth=12, num_heads=3)
+    model = _create_deit(
+        "deit_tiny_patch16_224", pretrained=pretrained, **dict(model_args, **kwargs)
+    )
+    return model
 
 
 def deit3_small_patch16_224(pretrained=False, **kwargs) -> SPViT:
@@ -85,8 +105,6 @@ def deit3_small_patch16_224(pretrained=False, **kwargs) -> SPViT:
         embed_dim=384,
         depth=12,
         num_heads=6,
-        no_embed_class=True,
-        init_values=1e-6,
     )
     model = _create_deit(
         "deit3_small_patch16_224", pretrained=pretrained, **dict(model_args, **kwargs)
@@ -103,8 +121,6 @@ def deit3_base_patch16_224(pretrained=False, **kwargs) -> SPViT:
         embed_dim=768,
         depth=12,
         num_heads=12,
-        no_embed_class=True,
-        init_values=1e-6,
     )
     model = _create_deit(
         "deit3_base_patch16_224", pretrained=pretrained, **dict(model_args, **kwargs)
@@ -121,8 +137,6 @@ def deit3_large_patch16_224(pretrained=False, **kwargs) -> SPViT:
         embed_dim=1024,
         depth=24,
         num_heads=16,
-        no_embed_class=True,
-        init_values=1e-6,
     )
     model = _create_deit(
         "deit3_large_patch16_224", pretrained=pretrained, **dict(model_args, **kwargs)
@@ -152,8 +166,8 @@ class SPViTFactory(Enum):
         vit_tiny_patch16_224,
         {
             "pretrained": True,
-            "class_token": False,
-            "global_pool": "avg",
+            # "class_token": False,
+            # "global_pool": "avg",
             "pretrained_strict": False,
         },
     )
@@ -162,8 +176,8 @@ class SPViTFactory(Enum):
         vit_small_patch16_224,
         {
             "pretrained": True,
-            "class_token": True,
-            "global_pool": "avg",
+            # "class_token": True,
+            # "global_pool": "avg",
             "pretrained_strict": False,
         },
     )
@@ -172,8 +186,8 @@ class SPViTFactory(Enum):
         vit_base_patch16_224,
         {
             "pretrained": True,
-            "class_token": False,
-            "global_pool": "avg",
+            # "class_token": False,
+            # "global_pool": "avg",
             "pretrained_strict": False,
         },
     )
@@ -182,19 +196,29 @@ class SPViTFactory(Enum):
         vit_large_patch16_224,
         {
             "pretrained": True,
-            "class_token": False,
-            "global_pool": "avg",
+            # "class_token": False,
+            # "global_pool": "avg",
             "pretrained_strict": False,
         },
     )
 
+    # DeiT-Ti
+    deit_tiny_patch16_224 = (
+        deit_tiny_patch16_224,
+        {
+            "pretrained": True,
+            # "class_token": False,
+            # "global_pool": "avg",
+            "pretrained_strict": False,
+        },
+    )
     # DeiT-S
     deit3_small_patch16_224 = (
         deit3_small_patch16_224,
         {
             "pretrained": True,
-            "class_token": False,
-            "global_pool": "avg",
+            # "class_token": False,
+            # "global_pool": "avg",
             "pretrained_strict": False,
             "init_values": 1e-4,
         },
@@ -205,10 +229,9 @@ class SPViTFactory(Enum):
         deit3_base_patch16_224,
         {
             "pretrained": True,
-            "class_token": False,
-            "global_pool": "avg",
+            # "class_token": False,
+            # "global_pool": "avg",
             "pretrained_strict": False,
-            "init_values": 1e-4,
         },
     )
 
@@ -217,15 +240,16 @@ class SPViTFactory(Enum):
         deit3_large_patch16_224,
         {
             "pretrained": True,
-            "class_token": False,
-            "global_pool": "avg",
+            # "class_token": False,
+            # "global_pool": "avg",
             "pretrained_strict": False,
-            "init_values": 1e-4,
         },
     )
 
 
-def create_model(model_name, window_size=4, stgm_location=[5, 6], bottleneck=True, pretrained=True):
+def create_model(
+    model_name, window_size=4, stgm_location=[5, 6], bottleneck=True, pretrained=True
+):
     constructor, args = SPViTFactory[model_name].value
     args["window_size"] = window_size
     args["stgm_locations"] = stgm_location
@@ -240,6 +264,6 @@ if __name__ == "__main__":
     # constructor, args = SPViTFactory["vit_tiny_patch16_224"].value
 
     # spvit = constructor(**args)
-    spvit = create_model("vit_tiny_patch16_224")
+    spvit = create_model("deit_tiny_patch16_224", window_size=95)
     print(spvit)
     print(spvit.forward_features(torch.randn(1, 3, 224, 224)).shape)

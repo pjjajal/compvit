@@ -1,4 +1,5 @@
-from typing import Callable, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Tuple, Union
+from typing_extensions import Literal
 from timm.layers import Mlp, PatchEmbed
 import torch
 import torch.nn as nn
@@ -14,7 +15,26 @@ from timm.models.vision_transformer import (
     checkpoint_seq,
 )
 from functools import partial
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    Union,
+    List,
+)
 
+from timm.layers import LayerType
+from torch.nn.modules import Module
+
+try:
+    from typing import Literal
+except ImportError:
+    from typing_extensions import Literal
 
 from .stgm import STGM
 
@@ -26,7 +46,7 @@ class SPViT(VisionTransformer):
         patch_size: Union[int, Tuple[int, int]] = 16,
         in_chans: int = 3,
         num_classes: int = 1000,
-        global_pool: str = "token",
+        global_pool: Literal["", "avg", "token", "map"] = "token",
         embed_dim: int = 768,
         depth: int = 12,
         num_heads: int = 12,
@@ -36,26 +56,29 @@ class SPViT(VisionTransformer):
         init_values: Optional[float] = None,
         class_token: bool = True,
         no_embed_class: bool = False,
+        reg_tokens: int = 0,
         pre_norm: bool = False,
         fc_norm: Optional[bool] = None,
+        dynamic_img_size: bool = False,
+        dynamic_img_pad: bool = False,
         drop_rate: float = 0.0,
         pos_drop_rate: float = 0.0,
         patch_drop_rate: float = 0.0,
         proj_drop_rate: float = 0.0,
         attn_drop_rate: float = 0.0,
         drop_path_rate: float = 0.0,
-        weight_init: str = "",
+        weight_init: Literal["skip", "jax", "jax_nlhb", "moco", ""] = "",
         embed_layer: Callable = PatchEmbed,
-        norm_layer: Optional[Callable] = None,
-        act_layer: Optional[Callable] = None,
-        block_fn: Callable = Block,
-        mlp_layer: Callable = Mlp,
+        norm_layer: Optional[LayerType] = None,
+        act_layer: Optional[LayerType] = None,
+        block_fn: Type[nn.Module] = Block,
+        mlp_layer: Type[nn.Module] = Mlp,
         window_size=4,
         # STGM location are the blocks that the STGM block overrides.
         stgm_locations=[5, 6],
         bottleneck=True,
         **kwargs
-    ):
+    ) -> None:
         super().__init__(
             img_size,
             patch_size,
@@ -71,8 +94,11 @@ class SPViT(VisionTransformer):
             init_values,
             class_token,
             no_embed_class,
+            reg_tokens,
             pre_norm,
             fc_norm,
+            dynamic_img_size,
+            dynamic_img_pad,
             drop_rate,
             pos_drop_rate,
             patch_drop_rate,
@@ -86,6 +112,7 @@ class SPViT(VisionTransformer):
             block_fn,
             mlp_layer,
         )
+
         use_fc_norm = global_pool == "avg" if fc_norm is None else fc_norm
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
@@ -111,7 +138,7 @@ class SPViT(VisionTransformer):
             norm_layer,
             mlp_layer,
             window_size=window_size,
-            num_patches=self.patch_embed.num_patches
+            num_patches=self.patch_embed.num_patches + self.num_prefix_tokens,
         )
         self.norm = norm_layer(embed_dim) if not use_fc_norm else nn.Identity()
         self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
@@ -120,7 +147,6 @@ class SPViT(VisionTransformer):
             self.blocks[i] = None
 
         self.init_weights()
-
 
     def forward_features(self, x):
         x = self.patch_embed(x)
@@ -143,13 +169,13 @@ class SPViT(VisionTransformer):
         x = self.norm(x)
         return x
 
-    def forward_head(self, x, pre_logits: bool = False):
-        if self.global_pool:
-            x = (
-                x[:, self.num_prefix_tokens :].mean(dim=1)
-                if self.global_pool == "avg"
-                else x[:, 0]
-            )
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        if self.attn_pool is not None:
+            x = self.attn_pool(x)
+        elif self.global_pool == "avg":
+            x = x[:, self.num_prefix_tokens :].mean(dim=1)
+        elif self.global_pool:
+            x = x[:, 0]  # class token
         x = self.fc_norm(x)
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
@@ -158,7 +184,7 @@ class SPViT(VisionTransformer):
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
-    
+
     def peft_parameters(self, train_bottleneck=False, blocks=False):
         parameters = []
 
@@ -172,13 +198,3 @@ class SPViT(VisionTransformer):
                     parameters.extend(block.parameters())
 
         return parameters
-
-
-
-if __name__ == "__main__":
-    spvit = SPViT()
-    print(spvit)
-    # print(spvit.forward_features(torch.randn(1,3, 224, 224)).shape)
-    # spvit.bottleneck = False
-    # print(spvit.forward_features(torch.randn(1,3, 224, 224)).shape)
-
