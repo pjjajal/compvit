@@ -166,3 +166,5 @@ logs
 **/*/*.pt
 
 !.gitkeep
+**/wandb
+**/data/*

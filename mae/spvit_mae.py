@@ -38,7 +38,7 @@ class MAEViT(nn.Module):
             torch.zeros((1, 1, decoder_embed_dim)), requires_grad=True
         )
         self.decoder_pos_embed = nn.Parameter(
-            torch.zeros((1, self.num_patches + 1, decoder_embed_dim)),
+            torch.zeros((1, self.num_patches, decoder_embed_dim)),
             requires_grad=True,
         )
 
@@ -92,8 +92,8 @@ class MAEViT(nn.Module):
         parameters.extend(self.decoder_embed.parameters())
         parameters.extend(self.decoder_pred.parameters())
         parameters.extend(self.decoder_norm.parameters())
-        parameters.extend(self.mask_token)
-        parameters.extend(self.decoder_pos_embed)
+        # parameters.extend(self.mask_token)
+        # parameters.extend(self.decoder_pos_embed)
 
         return parameters
 
@@ -110,7 +110,7 @@ class MAEViT(nn.Module):
         B, _, _ = encoder_outputs.shape
 
         # Create mask tokens
-        mask_tokens = self.mask_token.repeat(B, self.num_patches + 1, 1)
+        mask_tokens = self.mask_token.repeat(B, self.num_patches, 1)
         mask_tokens = mask_tokens + self.decoder_pos_embed
 
         # Project encoder output embedding dim to decoder
@@ -135,14 +135,13 @@ class MAEViT(nn.Module):
         # Average over tokens
         loss = loss.mean(dim=-1)
         # Sum over batches
-        loss = loss.sum()
+        loss = loss.mean()
 
         return loss
 
     def forward(self, x):
         baseline_outputs = self.forward_baseline(x)
         encoder_outputs = self.forward_encoder(x)
-        start = time.time()
         decoder_outputs = self.forward_decoder(encoder_outputs)
         loss = self.forward_loss(baseline_outputs, decoder_outputs)
         return loss

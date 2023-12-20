@@ -1,0 +1,27 @@
+vit:
+  img_size: 32
+  patch_size: 4
+  in_chans: 3
+  num_classes: 100
+  embed_dim: 384
+  depth: 12
+  num_heads: 12
+
+compvit:
+  img_size: 32
+  patch_size: 4
+  in_chans: 3
+  num_classes: 100
+  embed_dim: 384
+  depth: 12
+  num_heads: 12
+  window_size: 32
+
+hyperparameters:
+  lr: 1.0E-04
+  min_lr: 1.0e-6
+  warmup_lr_scale: 1.0e-3
+  warmup_epochs: 5
+  batch_size: 256
+  epochs: 200
+  mixup_alpha: 0.8 

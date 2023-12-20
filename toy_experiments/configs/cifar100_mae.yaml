@@ -1,0 +1,31 @@
+baseline:
+  img_size: 32
+  patch_size: 4
+  in_chans: 3
+  num_classes: 100
+  embed_dim: 384
+  depth: 12
+  num_heads: 12
+  checkpoint: "toy_experiments/checkpoints/2023-12-19-140355/best_performing.pt"
+
+compvit:
+  img_size: 32
+  patch_size: 4
+  in_chans: 3
+  num_classes: 100
+  embed_dim: 384
+  depth: 12
+  num_heads: 12
+  window_size: 32
+
+decoder:
+  decoder_embed_dim: 384
+  nhead: 6
+
+hyperparameters:
+  lr: 1.0E-03
+  min_lr: 1.0e-5
+  warmup_lr_scale: 1.0e-3
+  warmup_epochs: 5
+  batch_size: 512
+  epochs: 100

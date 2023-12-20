@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 import torchvision.transforms as tvt
 from timm.models.vision_transformer import VisionTransformer
@@ -10,6 +11,7 @@ from timm.scheduler import create_scheduler_v2
 import wandb
 
 from spvit.spvit_model import SPViT
+from mae.spvit_mae import MAEViT
 
 TRANSFORM = tvt.Compose(
     [
@@ -58,20 +60,21 @@ if __name__ == "__main__":
             "epochs": 100,
         },
     )
-    dataset = CIFAR10("./toy_experiments/toy_experiments", transform=TRANSFORM,)
-    eval_dataset = CIFAR10("./toy_experiments/toy_experiments", transform=TRANSFORM_TEST, train=False,)
+    dataset = CIFAR10("./toy_experiments", transform=TRANSFORM, download=True)
+    eval_dataset = CIFAR10("./toy_experiments", transform=TRANSFORM_TEST, train=False, download=True)
     train_loader = DataLoader(dataset, batch_size=256, shuffle=True, num_workers=8)
     eval_loader = DataLoader(eval_dataset, batch_size=8, shuffle=False, num_workers=1)
 
-    # model = VisionTransformer(
-    #     img_size=32,
-    #     patch_size=4,
-    #     in_chans=3,
-    #     num_classes=10,
-    #     embed_dim=192,
-    #     depth=12,
-    #     num_heads=6,
-    # ).to(device="cuda")
+    baseline = VisionTransformer(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=10,
+        embed_dim=192,
+        depth=12,
+        num_heads=6,
+    ).to(device="cuda")
+    baseline.load_state_dict(torch.load("toy_experiments/toy_experiments/62_cifar10.pt"))
 
     model = SPViT(
         img_size=32,
@@ -83,6 +86,21 @@ if __name__ == "__main__":
         num_heads=6,
         window_size=32,
     ).to(device="cuda")
+
+
+    decoder_layer = nn.TransformerDecoderLayer(
+        d_model=192,
+        nhead=6,
+        dim_feedforward=int(192 * 4),
+        dropout=0.0,
+        activation=F.gelu,
+        layer_norm_eps=1e-5,
+        batch_first=True,
+        norm_first=True,
+    )
+    decoder = nn.TransformerDecoder(decoder_layer, 4)
+
+    MAEViT()
     # model = torch.compile(model)
 
     criterion = nn.CrossEntropyLoss()
@@ -116,5 +134,5 @@ if __name__ == "__main__":
         val_acc = eval(eval_loader, model)
         print(f"batch loss: {batch_loss}, val acc: {val_acc}")
         wandb.log({"val_acc": val_acc, "train loss": batch_loss})
-        torch.save(model.state_dict(), f"./toy_experiments/{epoch}_spvit_cifar10.pt")
+        torch.save(model.state_dict(), f"./toy_experiments/{epoch}_cifar10.pt")
     wandb.finish()
