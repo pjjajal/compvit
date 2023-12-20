@@ -16,7 +16,7 @@ compvit:
   embed_dim: 384
   depth: 12
   num_heads: 12
-  window_size: 32
+  window_size: 4
 
 decoder:
   decoder_embed_dim: 384
@@ -27,5 +27,5 @@ hyperparameters:
   min_lr: 1.0e-5
   warmup_lr_scale: 1.0e-3
   warmup_epochs: 5
-  batch_size: 512
-  epochs: 100
+  batch_size: 256
+  epochs: 250
