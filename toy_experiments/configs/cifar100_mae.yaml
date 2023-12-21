@@ -23,9 +23,9 @@ decoder:
   nhead: 6
 
 hyperparameters:
-  lr: 1.0E-03
+  lr: 1.5E-03
   min_lr: 1.0e-5
-  warmup_lr_scale: 1.0e-3
+  warmup_lr_scale: 1.5e-3
   warmup_epochs: 5
   batch_size: 256
   epochs: 250

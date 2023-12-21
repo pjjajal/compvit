@@ -129,14 +129,14 @@ def main(args):
 
     if args.model == "vit":
         model = VisionTransformer(**model_config)
-        model.load_state_dict(
-            torch.load(
-                "toy_experiments/checkpoints/2023-12-19-140355/best_performing.pt"
-            )
-        )
 
     if args.model == "compvit":
         model = SPViT(**model_config)
+        model.load_state_dict(
+            torch.load(
+                "toy_experiments/checkpoints/mae_2023-12-20-164956/best_performing.pt"
+            )
+        )
 
     model = model.to(device="cuda")
 

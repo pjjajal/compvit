@@ -15,7 +15,7 @@ compvit:
   embed_dim: 384
   depth: 12
   num_heads: 12
-  window_size: 8
+  window_size: 4
 
 hyperparameters:
   lr: 1.0E-03
