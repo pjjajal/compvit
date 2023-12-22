@@ -20,7 +20,7 @@ from compvit.factory import compvit_factory
 TOY_EXPERIMENTS_PATH = Path("./toy_experiments")
 DATA_PATH = TOY_EXPERIMENTS_PATH / "data"
 CONFIG_PATH = TOY_EXPERIMENTS_PATH / "configs"
-CHECKPOINTS_PATH = TOY_EXPERIMENTS_PATH / "checkpoints"
+CHECKPOINTS_PATH = TOY_EXPERIMENTS_PATH / "checkpoints_dino"
 
 
 TRANSFORM = tvt.Compose(
@@ -68,7 +68,7 @@ def create_dataset(args):
     return train_dataset, test_dataset
 
 
-def evaluate(testloader, model):
+def evaluate(testloader, model, head):
     correct = 0
     total = 0
     elapsed_time = 0.0
@@ -82,6 +82,7 @@ def evaluate(testloader, model):
 
             start_event.record()
             outputs = model(images)
+            outputs = head(outputs)
             end_event.record()
             torch.cuda.synchronize()
 
@@ -143,7 +144,7 @@ def main(args):
             model.load_state_dict(torch.load(model_config["checkpoint"]))
 
     model = model.to(device=device)
-    head = nn.LazyLinear(head_config["num_classes"])
+    head = nn.LazyLinear(head_config["num_classes"]).to(device=device)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(
@@ -181,7 +182,7 @@ def main(args):
             running_loss += loss.item()
 
         batch_loss = running_loss / len(train_loader)
-        val_acc, inf_time = evaluate(test_loader, model)
+        val_acc, inf_time = evaluate(test_loader, model, head)
 
         # Logging
         print(

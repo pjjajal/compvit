@@ -18,4 +18,4 @@ hyperparameters:
   epochs: 200
   mixup_alpha: 0.8 
 
-device: cpu
+device: cuda
