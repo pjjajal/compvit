@@ -1,0 +1,21 @@
+dinov2:
+  name: dinov2_vits14
+  checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
+
+compvit:
+  name: compvits14
+  checkpoint: ""
+
+head:
+  num_classes: 100
+
+hyperparameters:
+  lr: 1.0E-03
+  min_lr: 1.0e-5
+  warmup_lr_scale: 1.0e-3
+  warmup_epochs: 5
+  batch_size: 256
+  epochs: 200
+  mixup_alpha: 0.8 
+
+device: cpu

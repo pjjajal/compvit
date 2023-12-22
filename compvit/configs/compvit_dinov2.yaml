@@ -1,0 +1,75 @@
+compvits14:
+  img_size: 518
+  patch_size: 14
+  embed_dim: 384
+  depth: 12
+  num_heads: 6
+  mlp_ratio: 4
+  init_values: 1.0 
+  ffn_layer: 'mlp' 
+  block_chunks: 0 
+  num_register_tokens: 0 
+  interpolate_antialias: False 
+  interpolate_offset: 0.1
+  # Compressor Specific
+  num_patches: 256
+  num_compressed_tokens: 16
+  bottleneck: "mixer_bottleneck"
+  bottleneck_locs: [5, 6]
+
+compvitb14:
+  img_size: 518
+  patch_size: 14
+  embed_dim: 768
+  depth: 12
+  num_heads: 12
+  mlp_ratio: 4
+  init_values: 1.0 
+  ffn_layer: 'mlp' 
+  block_chunks: 0 
+  num_register_tokens: 0 
+  interpolate_antialias: False 
+  interpolate_offset: 0.1
+  # Compressor Specific
+  num_patches: 256
+  num_compressed_tokens: 16
+  bottleneck: "mixer_bottleneck"
+  bottleneck_locs: [5, 6]
+
+compvitl14:
+  img_size: 518
+  patch_size: 14
+  embed_dim: 1024
+  depth: 24
+  num_heads: 16
+  mlp_ratio: 4
+  init_values: 1.0 
+  ffn_layer: 'mlp' 
+  block_chunks: 0 
+  num_register_tokens: 0 
+  interpolate_antialias: False 
+  interpolate_offset: 0.1
+  # Compressor Specific
+  num_patches: 256
+  num_compressed_tokens: 16
+  bottleneck: "mixer_bottleneck"
+  bottleneck_locs: [5, 6]
+
+compvitg14:
+  img_size: 518
+  patch_size: 14
+  embed_dim: 1536
+  depth: 40
+  num_heads: 6
+  mlp_ratio: 4
+  init_values: 1.0 
+  ffn_layer: 'swiglufused' 
+  block_chunks: 0 
+  num_register_tokens: 0 
+  interpolate_antialias: False 
+  interpolate_offset: 0.1
+  # Compressor Specific
+  num_patches: 256
+  num_compressed_tokens: 16
+  bottleneck: "mixer_bottleneck"
+  bottleneck_locs: [5, 6]
