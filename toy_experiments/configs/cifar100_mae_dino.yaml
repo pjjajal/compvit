@@ -1,9 +1,9 @@
 teacher:
   name: dinov2_vits14
-  checkpoint: ""
+  checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
 
 student:
-  name: dinov2_vits14
+  name: compvits14
 
 hyperparameters:
   lr: 1.0E-03

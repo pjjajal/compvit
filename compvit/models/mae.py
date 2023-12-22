@@ -95,10 +95,24 @@ class MAECompVit(nn.Module):
     @torch.no_grad()
     def forward_baseline(self, x):
         baseline_outputs = self.baseline.forward_features(x)
+        baseline_outputs = torch.cat(
+            [
+                baseline_outputs["x_norm_clstoken"].unsqueeze(1),
+                baseline_outputs["x_norm_patchtokens"],
+            ],
+            dim=1,
+        )
         return baseline_outputs
 
     def forward_encoder(self, x):
         encoder_outputs = self.encoder.forward_features(x)
+        encoder_outputs = torch.cat(
+            [
+                encoder_outputs["x_norm_clstoken"].unsqueeze(1),
+                encoder_outputs["x_norm_patchtokens"],
+            ],
+            dim=1,
+        )
         return encoder_outputs
 
     def forward_decoder(self, encoder_outputs):

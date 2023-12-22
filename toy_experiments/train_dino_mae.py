@@ -72,10 +72,11 @@ def main(args):
     baseline_config = configs["teacher"]
     compvit_config = configs["student"]
     hyperparameters = configs["hyperparameters"]
+    device = configs["device"]
 
     wandb.init(
         # set the wandb project where this run will be logged
-        project="compvit-toy",
+        project="compvit",
         # track hyperparameters and run metadata
         config={
             "architecture": "mae",
@@ -100,6 +101,7 @@ def main(args):
         teacher_name=baseline_config["name"], student_name=compvit_config["name"]
     )
     mae.baseline.load_state_dict(torch.load(baseline_checkpoint))
+    mae = mae.to(device=device)
     # decoder_layer = nn.TransformerDecoderLayer(
     #     d_model=baseline_config["embed_dim"],
     #     nhead=6,
@@ -138,6 +140,7 @@ def main(args):
         hyperparameters["min_lr"],
     )
 
+    scaler = torch.cuda.amp.grad_scaler.GradScaler()
     lowest_batch_loss = 1e6
     for epoch in range(hyperparameters["epochs"]):
         running_loss = 0.0
@@ -146,10 +149,13 @@ def main(args):
             label = label.to(device="cuda")
 
             optimizer.zero_grad()
-
-            loss = mae(img)
-            loss.backward()
-            optimizer.step()
+            with torch.autocast(device_type="cuda", dtype=torch.float16):
+                loss = mae(img)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            # loss.backward()
+            # optimizer.step()
 
             running_loss += loss.item()
 

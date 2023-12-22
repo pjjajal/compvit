@@ -34,7 +34,6 @@ class Compressor(nn.Module):
         super().__init__(*args, **kwargs)
         self.num_tokens = num_tokens
         self.num_compressed_tokens = num_compressed_tokens
-        print(num_tokens, num_compressed_tokens)
         self.bottleneck = bottleneck(self.num_tokens, self.num_compressed_tokens)
         # self.bottleneck = nn.Sequential(
         #     MixerBlock(dim, self.num_tokens),
