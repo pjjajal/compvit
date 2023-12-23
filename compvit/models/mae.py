@@ -92,7 +92,7 @@ class MAECompVit(nn.Module):
 
         return parameters
 
-    @torch.no_grad()
+    @torch.inference_mode(True)
     def forward_baseline(self, x):
         baseline_outputs = self.baseline.forward_features(x)
         baseline_outputs = torch.cat(
@@ -137,10 +137,10 @@ class MAECompVit(nn.Module):
 
         mean = baseline_outputs.mean(dim=-1, keepdim=True)
         var = baseline_outputs.var(dim=-1, keepdim=True)
-        # target = (baseline_outputs - mean) / (var + 1.0e-6) ** 0.5
+        target = (baseline_outputs - mean) / (var + 1.0e-6) ** 0.5
 
         # L2 norm over dim
-        loss = (baseline_outputs - decoder_outputs).norm(p=2, dim=-1)
+        loss = (target - decoder_outputs).norm(p=2, dim=-1)
         # Average over tokens
         loss = loss.mean(dim=-1)
         # Sum over batches
@@ -152,5 +152,6 @@ class MAECompVit(nn.Module):
         baseline_outputs = self.forward_baseline(x)
         encoder_outputs = self.forward_encoder(x)
         decoder_outputs = self.forward_decoder(encoder_outputs)
+        encoder_outputs.to(device="cpu")
         loss = self.forward_loss(baseline_outputs, decoder_outputs)
         return loss

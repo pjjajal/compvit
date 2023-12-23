@@ -140,7 +140,7 @@ def main(args):
         hyperparameters["min_lr"],
     )
 
-    scaler = torch.cuda.amp.grad_scaler.GradScaler()
+    # scaler = torch.cuda.amp.grad_scaler.GradScaler()
     lowest_batch_loss = 1e6
     for epoch in range(hyperparameters["epochs"]):
         running_loss = 0.0
@@ -149,15 +149,18 @@ def main(args):
             label = label.to(device="cuda")
 
             optimizer.zero_grad()
-            with torch.autocast(device_type="cuda", dtype=torch.float16):
-                loss = mae(img)
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            # loss.backward()
-            # optimizer.step()
+            # with torch.autocast(device_type="cuda", dtype=torch.float16):
+            loss = mae(img)
+            # scaler.scale(loss).backward()
+            # scaler.step(optimizer)
+            # scaler.update()
+            is_accumulating = (i + 1) % 4 != 0
+            running_loss += loss.detach().item()
+            loss = loss / 4
+            loss.backward()
+            if not is_accumulating or (i + 1) == len(train_loader):
+                optimizer.step()
 
-            running_loss += loss.item()
 
         batch_loss = running_loss / len(train_loader)
 
