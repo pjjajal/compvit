@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .compvit import CompViT
+from typing import Literal
 
 
 class MAECompVit(nn.Module):
@@ -14,6 +15,8 @@ class MAECompVit(nn.Module):
         embed_dim,
         decoder_embed_dim,
         norm_layer,
+        loss: Literal["l2", "barlow"] = "l2",
+        tradeoff: float = 5e-3,
         *args,
         **kwargs
     ) -> None:
@@ -21,6 +24,8 @@ class MAECompVit(nn.Module):
         self.baseline = baseline
         self.encoder = encoder
         self.decoder = decoder
+        self.loss = loss
+        self.tradeoff = tradeoff
 
         self.num_patches = self.encoder.total_tokens
         self.num_compressed_tokens = self.encoder.num_compressed_tokens
@@ -95,25 +100,25 @@ class MAECompVit(nn.Module):
     @torch.inference_mode(True)
     def forward_baseline(self, x):
         baseline_outputs = self.baseline.forward_features(x)
-        baseline_outputs = torch.cat(
-            [
-                baseline_outputs["x_norm_clstoken"].unsqueeze(1),
-                baseline_outputs["x_norm_patchtokens"],
-            ],
-            dim=1,
-        )
-        return baseline_outputs
+        # baseline_outputs = torch.cat(
+        #     [
+        #         baseline_outputs["x_norm_clstoken"].unsqueeze(1),
+        #         baseline_outputs["x_norm_patchtokens"],
+        #     ],
+        #     dim=1,
+        # )
+        return baseline_outputs["x_norm_patchtokens"]
 
     def forward_encoder(self, x):
         encoder_outputs = self.encoder.forward_features(x)
-        encoder_outputs = torch.cat(
-            [
-                encoder_outputs["x_norm_clstoken"].unsqueeze(1),
-                encoder_outputs["x_norm_patchtokens"],
-            ],
-            dim=1,
-        )
-        return encoder_outputs
+        # encoder_outputs = torch.cat(
+        #     [
+        #         encoder_outputs["x_norm_clstoken"].unsqueeze(1),
+        #         encoder_outputs["x_norm_patchtokens"],
+        #     ],
+        #     dim=1,
+        # )
+        return encoder_outputs["x_norm"]
 
     def forward_decoder(self, encoder_outputs):
         B, _, _ = encoder_outputs.shape
@@ -134,19 +139,49 @@ class MAECompVit(nn.Module):
 
         # Project decoder embed dim to baseline embed dim
         decoder_outputs = self.decoder_pred(decoder_outputs)
+        if self.loss == "l2":
+            loss = self.l2_loss(baseline_outputs, decoder_outputs)
+        elif self.loss == "barlow":
+            loss = self.barlow_loss(baseline_outputs, decoder_outputs)
+        return loss
 
-        mean = baseline_outputs.mean(dim=-1, keepdim=True)
-        var = baseline_outputs.var(dim=-1, keepdim=True)
-        target = (baseline_outputs - mean) / (var + 1.0e-6) ** 0.5
+    def l2_loss(self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor):
+        baseline_outputs_norm = (
+            baseline_outputs - baseline_outputs.mean(0)
+        ) / baseline_outputs.std(0)
+        decoder_outputs_norm = (
+            decoder_outputs - decoder_outputs.mean(0)
+        ) / decoder_outputs.std(0)
 
         # L2 norm over dim
-        loss = (target - decoder_outputs).norm(p=2, dim=-1)
-        # Average over tokens
-        loss = loss.mean(dim=-1)
-        # Sum over batches
-        loss = loss.mean()
+        loss = (
+            (baseline_outputs_norm - decoder_outputs_norm).norm(p="fro", dim=-1).mean()
+        )
+        return loss, {}
 
-        return loss
+    def barlow_loss(
+        self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor
+    ):
+        B, N, C = baseline_outputs.shape
+
+        baseline_outputs_norm = (
+            baseline_outputs - baseline_outputs.mean(0)
+        ) / baseline_outputs.std(0)
+        decoder_outputs_norm = (
+            decoder_outputs - decoder_outputs.mean(0)
+        ) / decoder_outputs.std(0)
+
+        # Similar to Barlow but we correlate over the token dimension.
+        c = baseline_outputs_norm @ decoder_outputs_norm.mT / C
+
+        c_diff = (c.diagonal().T - 1).pow(2)
+
+        off_diag = (c.triu() + c.tril()).pow(2) * self.tradeoff
+
+        c_diff= c_diff.sum(-1)
+        off_diag = off_diag.sum((-2, -1))
+        loss = (c_diff + off_diag).mean()
+        return loss, {"c_diff": c_diff, "off_diag": off_diag}
 
     def forward(self, x):
         baseline_outputs = self.forward_baseline(x)

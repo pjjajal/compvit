@@ -81,7 +81,11 @@ def evaluate(testloader, model, head):
             end_event = torch.cuda.Event(enable_timing=True)
 
             start_event.record()
-            outputs = model(images)
+            outputs = model(images, is_training=True)
+            if args.model == "dinov2":
+                outputs = outputs['x_norm_clstoken']
+            elif args.model == "compvit":
+                outputs = outputs['x_norm'].mean(-2)
             outputs = head(outputs)
             end_event.record()
             torch.cuda.synchronize()
@@ -104,7 +108,7 @@ def main(args):
 
     device = configs["device"]
 
-    wandb.init(
+    run = wandb.init(
         # set the wandb project where this run will be logged
         project="compvit",
         # track hyperparameters and run metadata
@@ -133,34 +137,43 @@ def main(args):
     )
 
     if args.model == "dinov2":
-        model = dinov2_factory(model_config["name"])
+        model, config = dinov2_factory(model_config["name"])
         if model_config["checkpoint"]:
             print("Loading weights")
             model.load_state_dict(torch.load(model_config["checkpoint"]))
 
     if args.model == "compvit":
-        model = compvit_factory(model_config["name"])
+        model, config = compvit_factory(model_config["name"])
         if model_config["checkpoint"]:
             model.load_state_dict(torch.load(model_config["checkpoint"]))
+    
+    run.config.update({**config})
 
     model = model.to(device=device)
     head = nn.LazyLinear(head_config["num_classes"]).to(device=device)
 
     criterion = nn.CrossEntropyLoss()
+    parameters = []
+    parameters.extend(head.parameters())
+    if args.model == "compvit":
+        parameters.extend(model.parameters())
     optimizer = optim.AdamW(
-        head.parameters(), lr=hyperparameters["lr"], weight_decay=0.05
+        parameters,
+        lr=hyperparameters["lr"],
+        weight_decay=0.05,
     )
-    # warmup_scheduler = optim.lr_scheduler.LinearLR(
-    #     optimizer,
-    #     start_factor=hyperparameters["warmup_lr_scale"],
-    #     end_factor=1.0,
-    #     total_iters=hyperparameters["warmup_epochs"],
-    # )
-    # cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
-    #     optimizer,
-    #     hyperparameters["epochs"] - hyperparameters["warmup_epochs"],
-    #     hyperparameters["min_lr"],
-    # )
+    if args.model == "compvit":
+        warmup_scheduler = optim.lr_scheduler.LinearLR(
+            optimizer,
+            start_factor=hyperparameters["warmup_lr_scale"],
+            end_factor=1.0,
+            total_iters=hyperparameters["warmup_epochs"],
+        )
+        cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            hyperparameters["epochs"] - hyperparameters["warmup_epochs"],
+            hyperparameters["min_lr"],
+        )
 
     highest_val_acc = 0.0
     for epoch in range(hyperparameters["epochs"]):
@@ -172,14 +185,20 @@ def main(args):
 
             optimizer.zero_grad()
 
-            with torch.no_grad():
-                outputs = model(img)
+            outputs = model(img, is_training=True)
+            if args.model == "dinov2":
+                outputs = outputs['x_norm_clstoken']
+            elif args.model == "compvit":
+                outputs = outputs['x_norm'].mean(-2)
             outputs = head(outputs)
             loss = criterion(outputs, label)
-            loss.backward()
-            optimizer.step()
 
-            running_loss += loss.item()
+            is_accumulating = (i + 1) % hyperparameters['accumulations'] != 0
+            loss = loss / hyperparameters['accumulations']
+            running_loss += loss.detach().item()
+            loss.backward()
+            if not is_accumulating or (i + 1) == len(train_loader):
+                optimizer.step()
 
         batch_loss = running_loss / len(train_loader)
         val_acc, inf_time = evaluate(test_loader, model, head)
@@ -198,10 +217,11 @@ def main(args):
         )
 
         # Scheduler Step
-        # if epoch >= hyperparameters["warmup_epochs"]:
-        #     cosine_scheduler.step()
-        # else:
-        #     warmup_scheduler.step()
+        if args.model == "compvit":
+            if epoch >= hyperparameters["warmup_epochs"]:
+                cosine_scheduler.step()
+            else:
+                warmup_scheduler.step()
 
         # Save Model
         if val_acc > highest_val_acc:

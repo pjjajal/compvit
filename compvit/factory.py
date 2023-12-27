@@ -3,6 +3,7 @@ from functools import partial
 from pathlib import Path
 from typing import Literal
 
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from omegaconf import OmegaConf
@@ -25,7 +26,7 @@ def compvit_factory(
     conf = OmegaConf.load(config_path)
     return CompViT(
         block_fn=partial(Block, attn_class=MemEffAttention), **conf[model_name]
-    )
+    ), conf[model_name]
 
 
 def mae_factory(
@@ -37,14 +38,14 @@ def mae_factory(
     config_path = CONFIG_PATH / "mae.yaml"
     conf = OmegaConf.load(config_path)
 
-    decoder_conf = conf['decoder']
+    decoder_conf = conf["decoder"]
 
-    teacher = dinov2_factory(teacher_name)
+    teacher, dino_conf = dinov2_factory(teacher_name)
 
-    student = compvit_factory(student_name)
+    student, compvit_conf = compvit_factory(student_name)
 
     decoder_layer = nn.TransformerDecoderLayer(
-        d_model=student.embed_dim,
+        d_model=decoder_conf['decoder_dim'],
         nhead=decoder_conf["nhead"],
         dim_feedforward=int(student.embed_dim * decoder_conf["mlp_ratio"]),
         dropout=0.0,
@@ -55,16 +56,22 @@ def mae_factory(
     )
     decoder = nn.TransformerDecoder(decoder_layer, decoder_conf["num_layers"])
 
-    return MAECompVit(
-        baseline=teacher,
-        encoder=student,
-        decoder=decoder,
-        baseline_embed_dim=teacher.embed_dim,
-        embed_dim=student.embed_dim,
-        decoder_embed_dim=student.embed_dim,
-        norm_layer=LayerNorm,
+    return (
+        MAECompVit(
+            baseline=teacher,
+            encoder=student,
+            decoder=decoder,
+            baseline_embed_dim=teacher.embed_dim,
+            embed_dim=student.embed_dim,
+            decoder_embed_dim=decoder_conf['decoder_dim'],
+            norm_layer=LayerNorm,
+            loss=conf['loss']
+        ),
+        {**dino_conf, **compvit_conf, **decoder_conf},
     )
 
+
 if __name__ == "__main__":
-    mae = mae_factory('dinov2_vits14', 'compvits14')
-    print(mae)
+    mae, _ = mae_factory("dinov2_vits14", "compvits14")
+    # print(mae)
+    mae(torch.randn((3, 3, 112, 112)))

@@ -25,20 +25,20 @@ CHECKPOINTS_PATH = TOY_EXPERIMENTS_PATH / "checkpoints_dino"
 TRANSFORM = tvt.Compose(
     [
         tvt.RandomCrop(32, padding=4),
-        tvt.Resize(224),
+        tvt.Resize(112),
         tvt.RandomHorizontalFlip(),
         tvt.ToTensor(),
         tvt.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ]
 )
 
-TRANSFORM_TEST = tvt.Compose(
-    [
-        tvt.Resize(32),
-        tvt.ToTensor(),
-        tvt.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    ]
-)
+# TRANSFORM_TEST = tvt.Compose(
+#     [
+#         tvt.Resize(32),
+#         tvt.ToTensor(),
+#         tvt.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+#     ]
+# )
 
 
 def parse_args():
@@ -54,16 +54,9 @@ def create_dataset(args):
     test_dataset = None
     if args.dataset == "cifar10":
         train_dataset = CIFAR10(DATA_PATH, transform=TRANSFORM, download=True)
-        test_dataset = CIFAR10(
-            DATA_PATH, transform=TRANSFORM_TEST, train=False, download=True
-        )
     elif args.dataset == "cifar100":
         train_dataset = CIFAR100(DATA_PATH, transform=TRANSFORM, download=True)
-        test_dataset = CIFAR100(
-            DATA_PATH, transform=TRANSFORM_TEST, train=False, download=True
-        )
-        pass
-    return train_dataset, test_dataset
+    return train_dataset
 
 
 def main(args):
@@ -74,7 +67,7 @@ def main(args):
     hyperparameters = configs["hyperparameters"]
     device = configs["device"]
 
-    wandb.init(
+    run = wandb.init(
         # set the wandb project where this run will be logged
         project="compvit",
         # track hyperparameters and run metadata
@@ -87,7 +80,7 @@ def main(args):
         },
     )
 
-    train_dataset, _ = create_dataset(args)
+    train_dataset = create_dataset(args)
     train_loader = DataLoader(
         train_dataset,
         batch_size=hyperparameters["batch_size"],
@@ -97,35 +90,17 @@ def main(args):
 
     baseline_checkpoint = baseline_config.pop("checkpoint")
 
-    mae = mae_factory(
+    mae, config = mae_factory(
         teacher_name=baseline_config["name"], student_name=compvit_config["name"]
     )
     mae.baseline.load_state_dict(torch.load(baseline_checkpoint))
+    mae.encoder.load_state_dict(torch.load(baseline_checkpoint), strict=False)
     mae = mae.to(device=device)
-    # decoder_layer = nn.TransformerDecoderLayer(
-    #     d_model=baseline_config["embed_dim"],
-    #     nhead=6,
-    #     dim_feedforward=int(baseline_config["embed_dim"] * 4),
-    #     dropout=0.0,
-    #     activation=F.gelu,
-    #     layer_norm_eps=1e-5,
-    #     batch_first=True,
-    #     norm_first=True,
-    # )
-    # decoder = nn.TransformerDecoder(decoder_layer, 4)
 
-    # mae = MAEViT(
-    #     baseline=baseline,
-    #     encoder=model,
-    #     decoder=decoder,
-    #     baseline_embed_dim=baseline.embed_dim,
-    #     embed_dim=model.embed_dim,
-    #     decoder_embed_dim=decoder_config["decoder_embed_dim"],
-    #     norm_layer=nn.LayerNorm,
-    # ).to(device="cuda")
+    run.config.update(config)
 
     optimizer = optim.AdamW(
-        mae.training_parameters(True), lr=hyperparameters["lr"], weight_decay=0.05
+        mae.training_parameters(whole=True), lr=hyperparameters["lr"], weight_decay=0.05
     )
 
     warmup_scheduler = optim.lr_scheduler.LinearLR(
@@ -150,22 +125,21 @@ def main(args):
 
             optimizer.zero_grad()
             # with torch.autocast(device_type="cuda", dtype=torch.float16):
-            loss = mae(img)
+            loss, other_loss = mae(img)
             # scaler.scale(loss).backward()
             # scaler.step(optimizer)
             # scaler.update()
-            is_accumulating = (i + 1) % 4 != 0
+            is_accumulating = (i + 1) % hyperparameters['accumulations'] != 0
+            loss = loss / hyperparameters['accumulations']
             running_loss += loss.detach().item()
-            loss = loss / 4
             loss.backward()
             if not is_accumulating or (i + 1) == len(train_loader):
                 optimizer.step()
 
-
         batch_loss = running_loss / len(train_loader)
 
         # Logging
-        print(f"batch loss: {batch_loss}, , lr: {optimizer.param_groups[0]['lr']}")
+        print(f"batch loss: {batch_loss}, , lr: {optimizer.param_groups[0]['lr']}, {other_loss}")
         wandb.log({"train loss": batch_loss, "lr": optimizer.param_groups[0]["lr"]})
 
         # Scheduler Step
