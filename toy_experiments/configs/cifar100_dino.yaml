@@ -4,19 +4,20 @@ dinov2:
 
 compvit:
   name: compvits14
-  checkpoint: "toy_experiments/checkpoints_dino/mae_2023-12-23-154355/best_performing.pt"
+  checkpoint: "toy_experiments/checkpoints_dino/2023-12-28-093813/best_performing.pt"
 
 head:
   num_classes: 100
+  checkpoint: "toy_experiments/checkpoints_dino/2023-12-28-093813/best_performing_head.pt"
 
 hyperparameters:
   lr: 1.0E-03
   min_lr: 1.0e-5
-  warmup_lr_scale: 1.0e-3
-  warmup_epochs: 30
-  batch_size: 64
+  warmup_lr_scale: 1.0e-5
+  warmup_epochs: 5
+  batch_size: 512
   epochs: 200
   mixup_alpha: 0.8 
-  accumulations: 8
+  accumulations: 1
 
 device: cuda

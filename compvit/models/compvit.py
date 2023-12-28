@@ -1,15 +1,17 @@
 from functools import partial
+from typing import Literal
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from dinov2.layers import Mlp
 from dinov2.layers import NestedTensorBlock as Block
-from dinov2.layers import PatchEmbed, Mlp, SwiGLUFFNFused
+from dinov2.layers import PatchEmbed, SwiGLUFFNFused
 from dinov2.models.vision_transformer import DinoVisionTransformer
 
+from ..layers.bottleneck import mixer_bottleneck, mixer_bottleneck_relu
 from ..layers.compressor import Compressor
-from ..layers.bottleneck import mixer_bottleneck
 
 
 class CompViT(DinoVisionTransformer):
@@ -38,7 +40,9 @@ class CompViT(DinoVisionTransformer):
         interpolate_offset=0.1,
         num_compressed_tokens=0,
         num_patches=256,
-        bottleneck="mixer_bottleneck",
+        bottleneck: Literal[
+            "mixer_bottleneck", "mixer_bottleneck_relu"
+        ] = "mixer_bottleneck",
         bottleneck_locs=[5, 6],
     ):
         super().__init__(
@@ -80,8 +84,8 @@ class CompViT(DinoVisionTransformer):
         else:
             raise NotImplementedError
 
-        # self.total_tokens = num_patches + self.num_tokens + self.num_register_tokens
-        self.total_tokens = num_patches
+        self.total_tokens = num_patches + self.num_tokens + self.num_register_tokens
+        # self.total_tokens = num_patches
         self.num_compressed_tokens = num_compressed_tokens
 
         # Add compressor.
@@ -95,6 +99,9 @@ class CompViT(DinoVisionTransformer):
 
             if bottleneck == "mixer_bottleneck":
                 bottleneck = partial(mixer_bottleneck, dim=embed_dim)
+            elif bottleneck == "mixer_bottleneck_relu":
+                bottleneck = partial(mixer_bottleneck_relu, dim=embed_dim)
+
             self.compressor = Compressor(
                 dim=embed_dim,
                 num_heads=num_heads,
@@ -107,7 +114,7 @@ class CompViT(DinoVisionTransformer):
                 ffn_layer=ffn_layer,
                 init_values=init_values,
                 num_compressed_tokens=num_compressed_tokens,
-                num_tokens=num_patches + self.num_tokens + self.num_register_tokens,
+                num_tokens=self.total_tokens,
                 bottleneck=bottleneck,
             )
 

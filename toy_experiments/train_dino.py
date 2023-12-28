@@ -26,7 +26,7 @@ CHECKPOINTS_PATH = TOY_EXPERIMENTS_PATH / "checkpoints_dino"
 TRANSFORM = tvt.Compose(
     [
         tvt.RandomCrop(32, padding=4),
-        tvt.Resize(224),
+        tvt.Resize(112),
         tvt.RandomHorizontalFlip(),
         tvt.ToTensor(),
         tvt.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
@@ -35,7 +35,7 @@ TRANSFORM = tvt.Compose(
 
 TRANSFORM_TEST = tvt.Compose(
     [
-        tvt.Resize(224),
+        tvt.Resize(112),
         tvt.ToTensor(),
         tvt.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ]
@@ -46,6 +46,7 @@ def parse_args():
     parser = argparse.ArgumentParser("training and evaluation script")
     parser.add_argument("--dataset", required=True, choices=["cifar10", "cifar100"])
     parser.add_argument("--model", required=True, choices=["dinov2", "compvit"])
+    parser.add_argument("--head", action="store_true")
     parser.add_argument("--eval", action="store_true")
 
     return parser.parse_args()
@@ -83,9 +84,9 @@ def evaluate(testloader, model, head):
             start_event.record()
             outputs = model(images, is_training=True)
             if args.model == "dinov2":
-                outputs = outputs['x_norm_clstoken']
+                outputs = outputs["x_norm_clstoken"]
             elif args.model == "compvit":
-                outputs = outputs['x_norm'].mean(-2)
+                outputs = outputs["x_norm"].mean(-2)
             outputs = head(outputs)
             end_event.record()
             torch.cuda.synchronize()
@@ -145,17 +146,21 @@ def main(args):
     if args.model == "compvit":
         model, config = compvit_factory(model_config["name"])
         if model_config["checkpoint"]:
+            print("Loading", model_config["checkpoint"])
             model.load_state_dict(torch.load(model_config["checkpoint"]))
-    
+
     run.config.update({**config})
 
     model = model.to(device=device)
     head = nn.LazyLinear(head_config["num_classes"]).to(device=device)
+    if head_config["checkpoint"]:
+        print("Loading", head_config["checkpoint"])
+        head.load_state_dict(torch.load(head_config["checkpoint"]))
 
     criterion = nn.CrossEntropyLoss()
     parameters = []
     parameters.extend(head.parameters())
-    if args.model == "compvit":
+    if args.model == "compvit" and not args.head:
         parameters.extend(model.parameters())
     optimizer = optim.AdamW(
         parameters,
@@ -168,11 +173,13 @@ def main(args):
             start_factor=hyperparameters["warmup_lr_scale"],
             end_factor=1.0,
             total_iters=hyperparameters["warmup_epochs"],
+            verbose=True,
         )
         cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
             hyperparameters["epochs"] - hyperparameters["warmup_epochs"],
             hyperparameters["min_lr"],
+            verbose=True,
         )
 
     highest_val_acc = 0.0
@@ -187,14 +194,14 @@ def main(args):
 
             outputs = model(img, is_training=True)
             if args.model == "dinov2":
-                outputs = outputs['x_norm_clstoken']
+                outputs = outputs["x_norm_clstoken"]
             elif args.model == "compvit":
-                outputs = outputs['x_norm'].mean(-2)
+                outputs = outputs["x_norm"].mean(-2)
             outputs = head(outputs)
             loss = criterion(outputs, label)
 
-            is_accumulating = (i + 1) % hyperparameters['accumulations'] != 0
-            loss = loss / hyperparameters['accumulations']
+            is_accumulating = (i + 1) % hyperparameters["accumulations"] != 0
+            loss = loss / hyperparameters["accumulations"]
             running_loss += loss.detach().item()
             loss.backward()
             if not is_accumulating or (i + 1) == len(train_loader):
@@ -227,7 +234,9 @@ def main(args):
         if val_acc > highest_val_acc:
             highest_val_acc = val_acc
             save_path = args.save_loc / f"best_performing.pt"
+            head_save_path = args.save_loc / f"best_performing_head.pt"
             torch.save(model.state_dict(), save_path)
+            torch.save(head.state_dict(), head_save_path)
     wandb.finish()
 
 

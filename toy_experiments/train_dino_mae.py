@@ -89,18 +89,22 @@ def main(args):
     )
 
     baseline_checkpoint = baseline_config.pop("checkpoint")
+    student_checkpoint = compvit_config.pop("checkpoint")
+    decoder_checkpoint = compvit_config.pop("decoder_checkpoint")
 
     mae, config = mae_factory(
         teacher_name=baseline_config["name"], student_name=compvit_config["name"]
     )
     mae.baseline.load_state_dict(torch.load(baseline_checkpoint))
-    mae.encoder.load_state_dict(torch.load(baseline_checkpoint), strict=False)
+    mae.encoder.load_state_dict(torch.load(student_checkpoint), strict=False)
+    if decoder_checkpoint:
+        mae.decoder.load_state_dict(torch.load(decoder_checkpoint))
     mae = mae.to(device=device)
 
     run.config.update(config)
 
     optimizer = optim.AdamW(
-        mae.training_parameters(whole=True), lr=hyperparameters["lr"], weight_decay=0.05
+        mae.training_parameters(whole=True), lr=hyperparameters["lr"], weight_decay=5e-2
     )
 
     warmup_scheduler = optim.lr_scheduler.LinearLR(
@@ -108,12 +112,15 @@ def main(args):
         start_factor=hyperparameters["warmup_lr_scale"],
         end_factor=1.0,
         total_iters=hyperparameters["warmup_epochs"],
+        verbose=True
     )
     cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
         hyperparameters["epochs"] - hyperparameters["warmup_epochs"],
         hyperparameters["min_lr"],
+        verbose=True
     )
+    
 
     # scaler = torch.cuda.amp.grad_scaler.GradScaler()
     lowest_batch_loss = 1e6
@@ -152,7 +159,9 @@ def main(args):
         if lowest_batch_loss > batch_loss:
             lowest_batch_loss = batch_loss
             save_path = args.save_loc / f"best_performing.pt"
+            save_path_mae = args.save_loc / f"best_performing_mae.pt"
             torch.save(mae.encoder.state_dict(), save_path)
+            torch.save(mae.state_dict(), save_path_mae)
     wandb.finish()
 
 

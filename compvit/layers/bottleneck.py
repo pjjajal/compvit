@@ -12,3 +12,12 @@ def mixer_bottleneck(num_tokens, num_compressed_tokens, dim):
         nn.GELU(),
         MixerBlock(dim, num_compressed_tokens),
     )
+
+def mixer_bottleneck_relu(num_tokens, num_compressed_tokens, dim):
+    return nn.Sequential(
+        MixerBlock(dim, num_tokens),
+        nn.Conv1d(num_tokens, num_compressed_tokens, 1),
+        nn.ReLU(),
+        nn.LayerNorm(dim),
+        MixerBlock(dim, num_compressed_tokens),
+    )

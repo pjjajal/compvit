@@ -107,6 +107,7 @@ class MAECompVit(nn.Module):
         #     ],
         #     dim=1,
         # )
+        return baseline_outputs["x_norm"]
         return baseline_outputs["x_norm_patchtokens"]
 
     def forward_encoder(self, x):
@@ -146,16 +147,30 @@ class MAECompVit(nn.Module):
         return loss
 
     def l2_loss(self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor):
-        baseline_outputs_norm = (
-            baseline_outputs - baseline_outputs.mean(0)
-        ) / baseline_outputs.std(0)
-        decoder_outputs_norm = (
-            decoder_outputs - decoder_outputs.mean(0)
-        ) / decoder_outputs.std(0)
+        # baseline_outputs_norm = (
+        #     baseline_outputs - baseline_outputs.mean(0)
+        # ) / baseline_outputs.std(0)
+        # decoder_outputs_norm = (
+        #     decoder_outputs - decoder_outputs.mean(0)
+        # ) / decoder_outputs.std(0)
+
+        baseline_outputs_norm = baseline_outputs
+        decoder_outputs_norm = decoder_outputs
+
+        mean = baseline_outputs.mean(dim=-1, keepdim=True)
+        var = baseline_outputs.var(dim=-1, keepdim=True)
+        baseline_outputs_norm = (baseline_outputs - mean) / (var + 1.0e-6) ** 0.5
 
         # L2 norm over dim
+        # loss = (
+        #     (baseline_outputs_norm - decoder_outputs_norm).norm(p="fro", dim=-1)
+        # )
+        # loss = (
+        #     (baseline_outputs_norm - decoder_outputs_norm).pow(2).sum(dim=(1, 2))
+        #     / self.num_patches
+        # ).mean()
         loss = (
-            (baseline_outputs_norm - decoder_outputs_norm).norm(p="fro", dim=-1).mean()
+            (decoder_outputs_norm - baseline_outputs_norm).pow(2).sum(dim=(1, 2)).mean()
         )
         return loss, {}
 
@@ -178,7 +193,7 @@ class MAECompVit(nn.Module):
 
         off_diag = (c.triu() + c.tril()).pow(2) * self.tradeoff
 
-        c_diff= c_diff.sum(-1)
+        c_diff = c_diff.sum(-1)
         off_diag = off_diag.sum((-2, -1))
         loss = (c_diff + off_diag).mean()
         return loss, {"c_diff": c_diff, "off_diag": off_diag}
@@ -186,7 +201,12 @@ class MAECompVit(nn.Module):
     def forward(self, x):
         baseline_outputs = self.forward_baseline(x)
         encoder_outputs = self.forward_encoder(x)
-        decoder_outputs = self.forward_decoder(encoder_outputs)
+        # decoder_outputs = self.forward_decoder(encoder_outputs)
+
+        # L2 of CLS
+        baseline_outputs = baseline_outputs[:, 0, :].unsqueeze(1)
+        decoder_outputs = self.decoder_embed(encoder_outputs.mean(dim=1).unsqueeze(1))
+        #
         encoder_outputs.to(device="cpu")
         loss = self.forward_loss(baseline_outputs, decoder_outputs)
         return loss
