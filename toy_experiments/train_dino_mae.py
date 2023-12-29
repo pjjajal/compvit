@@ -25,33 +25,23 @@ CHECKPOINTS_PATH = TOY_EXPERIMENTS_PATH / "checkpoints_dino"
 TRANSFORM = tvt.Compose(
     [
         tvt.RandomCrop(32, padding=4),
-        tvt.Resize(112),
+        tvt.Resize(224),
         tvt.RandomHorizontalFlip(),
         tvt.ToTensor(),
         tvt.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ]
 )
 
-# TRANSFORM_TEST = tvt.Compose(
-#     [
-#         tvt.Resize(32),
-#         tvt.ToTensor(),
-#         tvt.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-#     ]
-# )
-
 
 def parse_args():
     parser = argparse.ArgumentParser("training and evaluation script")
     parser.add_argument("--dataset", required=True, choices=["cifar10", "cifar100"])
-    # parser.add_argument("--model", required=True, choices=["dinov2", "compvit"])
 
     return parser.parse_args()
 
 
 def create_dataset(args):
     train_dataset = None
-    test_dataset = None
     if args.dataset == "cifar10":
         train_dataset = CIFAR10(DATA_PATH, transform=TRANSFORM, download=True)
     elif args.dataset == "cifar100":
@@ -130,7 +120,7 @@ def main(args):
             img = img.to(device="cuda")
             label = label.to(device="cuda")
 
-            optimizer.zero_grad()
+            # optimizer.zero_grad()
             # with torch.autocast(device_type="cuda", dtype=torch.float16):
             loss, other_loss = mae(img)
             # scaler.scale(loss).backward()
@@ -142,6 +132,7 @@ def main(args):
             loss.backward()
             if not is_accumulating or (i + 1) == len(train_loader):
                 optimizer.step()
+                optimizer.zero_grad()
 
         batch_loss = running_loss / len(train_loader)
 

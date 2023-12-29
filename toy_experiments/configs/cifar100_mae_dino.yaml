@@ -4,18 +4,19 @@ teacher:
 
 student:
   name: compvits14
-  # checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
-  decoder_checkpoint: "toy_experiments/checkpoints_dino/mae_2023-12-27-230758/best_performing_decoder.pt"
-  checkpoint: "toy_experiments/checkpoints_dino/mae_2023-12-27-230758/best_performing.pt"
+  checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
+  # decoder_checkpoint: "toy_experiments/checkpoints_dino/mae_2023-12-27-230758/best_performing_decoder.pt"
+  decoder_checkpoint: ""
+  # checkpoint: "toy_experiments/checkpoints_dino/mae_2023-12-27-230758/best_performing.pt"
 
 hyperparameters:
-  lr: 1.0E-03
-  min_lr: 1.0e-6
-  warmup_lr_scale: 1.0e-3
-  warmup_epochs: 20
-  batch_size: 800
+  lr: 2.0E-03
+  min_lr: 1.0e-8
+  warmup_lr_scale: 1.0e-4
+  warmup_epochs: 10
+  batch_size: 256
   epochs: 800
   mixup_alpha: 0.8 
-  accumulations: 1
+  accumulations: 8
 
 device: cuda:0

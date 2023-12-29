@@ -26,7 +26,7 @@ CHECKPOINTS_PATH = TOY_EXPERIMENTS_PATH / "checkpoints_dino"
 TRANSFORM = tvt.Compose(
     [
         tvt.RandomCrop(32, padding=4),
-        tvt.Resize(112),
+        tvt.Resize(224),
         tvt.RandomHorizontalFlip(),
         tvt.ToTensor(),
         tvt.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
@@ -35,7 +35,7 @@ TRANSFORM = tvt.Compose(
 
 TRANSFORM_TEST = tvt.Compose(
     [
-        tvt.Resize(112),
+        tvt.Resize(224),
         tvt.ToTensor(),
         tvt.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ]
@@ -129,7 +129,7 @@ def main(args):
         shuffle=True,
         num_workers=8,
     )
-    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=1)
+    test_loader = DataLoader(test_dataset, batch_size=hyperparameters["test_batch_size"], shuffle=False, num_workers=1)
 
     # Mixup
     mixup_fn = Mixup(
@@ -156,6 +156,23 @@ def main(args):
     if head_config["checkpoint"]:
         print("Loading", head_config["checkpoint"])
         head.load_state_dict(torch.load(head_config["checkpoint"]))
+
+    # EVAL STUFF ########
+    if args.eval:
+        val_acc, inf_time = evaluate(test_loader, model, head)
+        print(
+            f"val acc: {val_acc}, inf time: {inf_time}"
+        )
+        wandb.log(
+            {
+                "val_acc": val_acc,
+                "inf time": inf_time,
+                "eval": True
+            }
+        )
+        wandb.finish()
+        return 0
+    ####################
 
     criterion = nn.CrossEntropyLoss()
     parameters = []
