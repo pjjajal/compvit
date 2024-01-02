@@ -129,7 +129,12 @@ def main(args):
         shuffle=True,
         num_workers=8,
     )
-    test_loader = DataLoader(test_dataset, batch_size=hyperparameters["test_batch_size"], shuffle=False, num_workers=1)
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=hyperparameters["test_batch_size"],
+        shuffle=False,
+        num_workers=1,
+    )
 
     # Mixup
     mixup_fn = Mixup(
@@ -160,16 +165,8 @@ def main(args):
     # EVAL STUFF ########
     if args.eval:
         val_acc, inf_time = evaluate(test_loader, model, head)
-        print(
-            f"val acc: {val_acc}, inf time: {inf_time}"
-        )
-        wandb.log(
-            {
-                "val_acc": val_acc,
-                "inf time": inf_time,
-                "eval": True
-            }
-        )
+        print(f"val acc: {val_acc}, inf time: {inf_time}")
+        wandb.log({"val_acc": val_acc, "inf time": inf_time, "eval": True})
         wandb.finish()
         return 0
     ####################
@@ -184,7 +181,7 @@ def main(args):
         lr=hyperparameters["lr"],
         weight_decay=0.05,
     )
-    if args.model == "compvit":
+    if args.model == "compvit" and not args.head:
         warmup_scheduler = optim.lr_scheduler.LinearLR(
             optimizer,
             start_factor=hyperparameters["warmup_lr_scale"],
@@ -207,8 +204,6 @@ def main(args):
             label = label.to(device=device)
             img, label = mixup_fn(img, label)
 
-            optimizer.zero_grad()
-
             outputs = model(img, is_training=True)
             if args.model == "dinov2":
                 outputs = outputs["x_norm_clstoken"]
@@ -218,11 +213,12 @@ def main(args):
             loss = criterion(outputs, label)
 
             is_accumulating = (i + 1) % hyperparameters["accumulations"] != 0
-            loss = loss / hyperparameters["accumulations"]
+            # loss = loss / hyperparameters["accumulations"]
             running_loss += loss.detach().item()
             loss.backward()
             if not is_accumulating or (i + 1) == len(train_loader):
                 optimizer.step()
+                optimizer.zero_grad()
 
         batch_loss = running_loss / len(train_loader)
         val_acc, inf_time = evaluate(test_loader, model, head)
@@ -241,7 +237,7 @@ def main(args):
         )
 
         # Scheduler Step
-        if args.model == "compvit":
+        if args.model == "compvit" and not args.head:
             if epoch >= hyperparameters["warmup_epochs"]:
                 cosine_scheduler.step()
             else:

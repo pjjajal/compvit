@@ -32,6 +32,16 @@ TRANSFORM = tvt.Compose(
     ]
 )
 
+TRANSFORM = tvt.Compose(
+    [
+        tvt.RandomCrop(32, padding=4),
+        tvt.Resize(112),
+        tvt.RandomHorizontalFlip(),
+        tvt.ToTensor(),
+        tvt.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ]
+)
+
 
 def parse_args():
     parser = argparse.ArgumentParser("training and evaluation script")
