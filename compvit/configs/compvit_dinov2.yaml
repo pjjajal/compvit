@@ -13,9 +13,9 @@ compvits14:
   interpolate_offset: 0.1
   # Compressor Specific
   num_patches: 256
-  num_compressed_tokens: 32
+  num_compressed_tokens: 64
   bottleneck: "mixer_bottleneck"
-  bottleneck_locs: [3, 4]
+  bottleneck_locs: [4, 5]
 
 compvitb14:
   img_size: 518

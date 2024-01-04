@@ -32,16 +32,7 @@ TRANSFORM = tvt.Compose(
     ]
 )
 
-TRANSFORM = tvt.Compose(
-    [
-        tvt.RandomCrop(32, padding=4),
-        tvt.Resize(112),
-        tvt.RandomHorizontalFlip(),
-        tvt.ToTensor(),
-        tvt.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    ]
-)
-
+downsize = tvt.Resize(112)
 
 def parse_args():
     parser = argparse.ArgumentParser("training and evaluation script")
@@ -132,12 +123,12 @@ def main(args):
 
             # optimizer.zero_grad()
             # with torch.autocast(device_type="cuda", dtype=torch.float16):
-            loss, other_loss = mae(img)
+            loss, other_loss = mae(img, downsize(img))
             # scaler.scale(loss).backward()
             # scaler.step(optimizer)
             # scaler.update()
             is_accumulating = (i + 1) % hyperparameters['accumulations'] != 0
-            loss = loss / hyperparameters['accumulations']
+            # loss = loss / hyperparameters['accumulations']
             running_loss += loss.detach().item()
             loss.backward()
             if not is_accumulating or (i + 1) == len(train_loader):

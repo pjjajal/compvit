@@ -97,7 +97,7 @@ class MAECompVit(nn.Module):
 
         return parameters
 
-    @torch.inference_mode(True)
+    @torch.no_grad()
     def forward_baseline(self, x):
         baseline_outputs = self.baseline.forward_features(x)
         # baseline_outputs = torch.cat(
@@ -153,6 +153,7 @@ class MAECompVit(nn.Module):
         # decoder_outputs_norm = (
         #     decoder_outputs - decoder_outputs.mean(0)
         # ) / decoder_outputs.std(0)
+        return F.smooth_l1_loss(decoder_outputs, baseline_outputs, reduction="mean"), {}
 
         baseline_outputs_norm = baseline_outputs
         decoder_outputs_norm = decoder_outputs
@@ -198,8 +199,8 @@ class MAECompVit(nn.Module):
         loss = (c_diff + off_diag).mean()
         return loss, {"c_diff": c_diff, "off_diag": off_diag}
 
-    def forward(self, x):
-        baseline_outputs = self.forward_baseline(x)
+    def forward(self, x, xbaseline):
+        baseline_outputs = self.forward_baseline(xbaseline)
         encoder_outputs = self.forward_encoder(x)
         # decoder_outputs = self.forward_decoder(encoder_outputs)
 
