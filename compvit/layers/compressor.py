@@ -86,10 +86,11 @@ class Compressor(nn.Module):
         compressed_tokens = self.bottleneck(x)
 
         # Transfer to compressed tokens
+        x = torch.concat([x, compressed_tokens], dim=1)
         compressed_tokens = self.block_1(x, compressed_tokens)
 
         # Refine compressed tokens
-        x = torch.concat([x, compressed_tokens], dim=1)
+        # x = torch.concat([x, compressed_tokens], dim=1)
         compressed_tokens = self.block_2(x, compressed_tokens + self.global_center)
 
         return compressed_tokens

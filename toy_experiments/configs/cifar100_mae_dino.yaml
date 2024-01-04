@@ -14,9 +14,9 @@ hyperparameters:
   min_lr: 1.0e-8
   warmup_lr_scale: 1.0e-4
   warmup_epochs: 10
-  batch_size: 200
-  epochs: 800
+  batch_size: 512
+  epochs: 400
   mixup_alpha: 0.8 
-  accumulations: 16
+  accumulations: 1
 
 device: cuda:0

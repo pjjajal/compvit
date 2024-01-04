@@ -208,6 +208,6 @@ class MAECompVit(nn.Module):
         baseline_outputs = baseline_outputs[:, 0, :].unsqueeze(1)
         decoder_outputs = self.decoder_embed(encoder_outputs.mean(dim=1).unsqueeze(1))
         #
-        encoder_outputs.to(device="cpu")
+        # encoder_outputs.to(device="cpu")
         loss = self.forward_loss(baseline_outputs, decoder_outputs)
         return loss

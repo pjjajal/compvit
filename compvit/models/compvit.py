@@ -10,7 +10,7 @@ from dinov2.layers import NestedTensorBlock as Block
 from dinov2.layers import PatchEmbed, SwiGLUFFNFused
 from dinov2.models.vision_transformer import DinoVisionTransformer
 
-from ..layers.bottleneck import mixer_bottleneck, mixer_bottleneck_relu
+from ..layers.bottleneck import mixer_bottleneck, mixer_bottleneck_relu, mixer_bottleneck_multi
 from ..layers.compressor import Compressor
 
 
@@ -101,6 +101,8 @@ class CompViT(DinoVisionTransformer):
                 bottleneck = partial(mixer_bottleneck, dim=embed_dim)
             elif bottleneck == "mixer_bottleneck_relu":
                 bottleneck = partial(mixer_bottleneck_relu, dim=embed_dim)
+            elif bottleneck == "mixer_bottleneck_multi":
+                bottleneck = partial(mixer_bottleneck_multi, dim=embed_dim, ratio=mlp_ratio)
 
             self.compressor = Compressor(
                 dim=embed_dim,
