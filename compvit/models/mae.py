@@ -5,6 +5,29 @@ from .compvit import CompViT
 from typing import Literal
 
 
+class Mask(nn.Module):
+    def __init__(self, decoder_embed_dim, num_patches) -> None:
+        super().__init__()
+        self.mask_token = nn.Parameter(
+            torch.zeros((1, 1, decoder_embed_dim)), requires_grad=True
+        )
+        self.decoder_pos_embed = nn.Parameter(
+            torch.zeros((1, self.num_patches, decoder_embed_dim)),
+            requires_grad=True,
+        )
+    def initialize_weights(self):
+        # decoder position embedding initialization
+        torch.nn.init.normal_(self.decoder_pos_embed, std=0.02)
+
+        # mask token init
+        # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
+        torch.nn.init.normal_(self.mask_token, std=0.02)
+
+    def forward(self, B, num_patches):
+        mask_tokens = self.mask_token.repeat(B, num_patches, 1)
+        mask_tokens = mask_tokens + self.decoder_pos_embed
+        return mask_tokens
+
 class MAECompVit(nn.Module):
     def __init__(
         self,
@@ -31,13 +54,14 @@ class MAECompVit(nn.Module):
         self.num_compressed_tokens = self.encoder.num_compressed_tokens
 
         # MAE decoder specifics
-        self.mask_token = nn.Parameter(
-            torch.zeros((1, 1, decoder_embed_dim)), requires_grad=True
-        )
-        self.decoder_pos_embed = nn.Parameter(
-            torch.zeros((1, self.num_patches, decoder_embed_dim)),
-            requires_grad=True,
-        )
+        # self.mask_token = nn.Parameter(
+        #     torch.zeros((1, 1, decoder_embed_dim)), requires_grad=True
+        # )
+        # self.decoder_pos_embed = nn.Parameter(
+        #     torch.zeros((1, self.num_patches, decoder_embed_dim)),
+        #     requires_grad=True,
+        # )
+        self.mask_gen = Mask(decoder_embed_dim, self.num_patches)
 
         # Decoder Norm
         self.decoder_norm = norm_layer(decoder_embed_dim)
@@ -57,11 +81,13 @@ class MAECompVit(nn.Module):
 
     def initialize_weights(self):
         # decoder position embedding initialization
-        torch.nn.init.normal_(self.decoder_pos_embed, std=0.02)
+        # torch.nn.init.normal_(self.decoder_pos_embed, std=0.02)
 
         # mask token init
         # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
-        torch.nn.init.normal_(self.mask_token, std=0.02)
+        # torch.nn.init.normal_(self.mask_token, std=0.02)
+
+        self.mask_gen.initialize_weights()
 
         # decoder_embed and decoder_pred initialization
         self._init_weights(self.decoder_embed)
@@ -98,6 +124,7 @@ class MAECompVit(nn.Module):
         parameters.extend(self.decoder_embed.parameters())
         parameters.extend(self.decoder_pred.parameters())
         parameters.extend(self.decoder_norm.parameters())
+        parameters.extend(self.mask_gen.parameters())
         # parameters.extend(self.mask_token)
         # parameters.extend(self.decoder_pos_embed)
 
@@ -131,8 +158,9 @@ class MAECompVit(nn.Module):
         B, _, _ = encoder_outputs.shape
 
         # Create mask tokens
-        mask_tokens = self.mask_token.repeat(B, self.num_patches, 1)
-        mask_tokens = mask_tokens + self.decoder_pos_embed
+        # mask_tokens = self.mask_token.repeat(B, self.num_patches, 1)
+        # mask_tokens = mask_tokens + self.decoder_pos_embed
+        mask_tokens = self.mask_gen(B, self.num_patches)
 
         # Project encoder output embedding dim to decoder
         encoder_outputs = self.decoder_embed(encoder_outputs)
