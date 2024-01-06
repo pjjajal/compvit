@@ -32,7 +32,9 @@ TRANSFORM = tvt.Compose(
     ]
 )
 
-downsize = tvt.Resize(112)
+# downsize = tvt.RandomChoice([tvt.Resize(56), tvt.Resize(112), tvt.Resize(224)], p=[0.0,1.0,0.0])
+# downsize = tvt.Resize(112)
+downsize = tvt.Resize(224)
 
 def parse_args():
     parser = argparse.ArgumentParser("training and evaluation script")
@@ -60,7 +62,7 @@ def main(args):
 
     run = wandb.init(
         # set the wandb project where this run will be logged
-        project="compvit",
+        project="compvit-rcac",
         # track hyperparameters and run metadata
         config={
             "architecture": "mae",

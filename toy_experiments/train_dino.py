@@ -111,7 +111,7 @@ def main(args):
 
     run = wandb.init(
         # set the wandb project where this run will be logged
-        project="compvit",
+        project="compvit-rcac",
         # track hyperparameters and run metadata
         config={
             "architecture": args.model,
@@ -180,19 +180,27 @@ def main(args):
         parameters,
         lr=hyperparameters["lr"],
         weight_decay=0.05,
+        fused=True
     )
     if args.model == "compvit" and not args.head:
+        cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            hyperparameters["epochs"] - hyperparameters["warmup_epochs"],
+            hyperparameters["min_lr"],
+            verbose=True,
+        )
+        # cosine_scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        #     optimizer,
+        #     30,
+        #     T_mult=1,
+        #     eta_min=hyperparameters["min_lr"],
+        #     verbose=True,
+        # )
         warmup_scheduler = optim.lr_scheduler.LinearLR(
             optimizer,
             start_factor=hyperparameters["warmup_lr_scale"],
             end_factor=1.0,
             total_iters=hyperparameters["warmup_epochs"],
-            verbose=True,
-        )
-        cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            hyperparameters["epochs"] - hyperparameters["warmup_epochs"],
-            hyperparameters["min_lr"],
             verbose=True,
         )
 
