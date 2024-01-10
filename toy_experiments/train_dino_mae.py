@@ -9,12 +9,13 @@ import torch.optim as optim
 import torchvision.transforms as tvt
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
-from torchvision.datasets import CIFAR10, CIFAR100
+from torchvision.datasets import CIFAR10, CIFAR100, ImageNet
 from tqdm import tqdm
 
 import wandb
 from compvit.factory import compvit_factory, mae_factory
 from dinov2.factory import dinov2_factory
+from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 TOY_EXPERIMENTS_PATH = Path("./toy_experiments")
 DATA_PATH = TOY_EXPERIMENTS_PATH / "data"
@@ -22,34 +23,46 @@ CONFIG_PATH = TOY_EXPERIMENTS_PATH / "configs"
 CHECKPOINTS_PATH = TOY_EXPERIMENTS_PATH / "checkpoints_dino"
 
 
-TRANSFORM = tvt.Compose(
-    [
-        tvt.RandomCrop(32, padding=4),
-        tvt.Resize(224),
-        tvt.RandomHorizontalFlip(),
-        tvt.ToTensor(),
-        tvt.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    ]
-)
-
-# downsize = tvt.RandomChoice([tvt.Resize(56), tvt.Resize(112), tvt.Resize(224)], p=[0.0,1.0,0.0])
-# downsize = tvt.Resize(112)
-# downsize = tvt.Resize(56)
+def create_transform(args):
+    if args.dataset in ["cifar10", "cifar100"]:
+        return tvt.Compose(
+            [
+                tvt.RandomCrop(32, padding=4),
+                tvt.Resize(224),
+                tvt.RandomHorizontalFlip(),
+                tvt.ToTensor(),
+                tvt.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+            ]
+        )
+    if args.dataset == "imagenet":
+        return tvt.Compose(
+            [
+                    tvt.RandomResizedCrop(
+                        args.input_size, scale=(0.2, 1.0), interpolation=3
+                    ),  # 3 is bicubic
+                    tvt.RandomHorizontalFlip(),
+                    tvt.ToTensor(),
+                    tvt.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+            ]
+        )
 
 def parse_args():
     parser = argparse.ArgumentParser("training and evaluation script")
-    parser.add_argument("--dataset", required=True, choices=["cifar10", "cifar100"])
+    parser.add_argument("--dataset", required=True, choices=["cifar10", "cifar100", "imagenet"])
     parser.add_argument("--downsize", required=True, type=int, default=224)
 
     return parser.parse_args()
 
 
-def create_dataset(args):
+def create_dataset(args, DATA_PATH):
     train_dataset = None
+    TRANSFORM = create_transform(args)
     if args.dataset == "cifar10":
         train_dataset = CIFAR10(DATA_PATH, transform=TRANSFORM, download=True)
     elif args.dataset == "cifar100":
         train_dataset = CIFAR100(DATA_PATH, transform=TRANSFORM, download=True)
+    elif args.dataset == "imagenet":
+        train_dataset = ImageNet(data_loc, transform=TRANSFORM)
     return train_dataset
 
 
@@ -60,6 +73,7 @@ def main(args):
     compvit_config = configs["student"]
     hyperparameters = configs["hyperparameters"]
     device = configs["device"]
+    DATA_PATH = getattr(configs, 'data_loc', DATA_PATH)
 
     downsize = tvt.Resize(args.downsize)
 
@@ -76,7 +90,7 @@ def main(args):
         },
     )
 
-    train_dataset = create_dataset(args)
+    train_dataset = create_dataset(args, DATA_PATH)
     train_loader = DataLoader(
         train_dataset,
         batch_size=hyperparameters["batch_size"],
