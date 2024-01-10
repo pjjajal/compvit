@@ -28,10 +28,10 @@ def mixer_bottleneck_multi(num_tokens, num_compressed_tokens, dim, ratio):
     return nn.Sequential(
         MixerBlock(dim, num_tokens),
         nn.Conv1d(num_tokens, num_tokens * ratio, 1),
-        nn.BatchNorm1d(num_compressed_tokens),
+        nn.BatchNorm1d(num_tokens * ratio),
         nn.GELU(),
         nn.Conv1d(num_tokens * ratio, num_tokens * ratio, 1),
-        nn.BatchNorm1d(num_compressed_tokens),
+        nn.BatchNorm1d(num_tokens * ratio),
         nn.GELU(),
         nn.Conv1d(num_tokens * ratio, num_compressed_tokens, 1),
         nn.BatchNorm1d(num_compressed_tokens),

@@ -157,7 +157,7 @@ def main(args):
     run.config.update({**config})
 
     model = model.to(device=device)
-    head = nn.LazyLinear(head_config["num_classes"]).to(device=device)
+    head = nn.Linear(model.embed_dim, head_config["num_classes"]).to(device=device)
     if head_config["checkpoint"]:
         print("Loading", head_config["checkpoint"])
         head.load_state_dict(torch.load(head_config["checkpoint"]))

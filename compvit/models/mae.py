@@ -12,7 +12,7 @@ class Mask(nn.Module):
             torch.zeros((1, 1, decoder_embed_dim)), requires_grad=True
         )
         self.decoder_pos_embed = nn.Parameter(
-            torch.zeros((1, self.num_patches, decoder_embed_dim)),
+            torch.zeros((1, num_patches, decoder_embed_dim)),
             requires_grad=True,
         )
     def initialize_weights(self):
@@ -73,9 +73,6 @@ class MAECompVit(nn.Module):
             decoder_embed_dim, baseline_embed_dim, bias=True
         )  # decoder to patch
 
-        self.baseline_proj = nn.Linear(
-            baseline_embed_dim, baseline_embed_dim, bias=True
-        )
 
         self.initialize_weights()
 
@@ -92,8 +89,6 @@ class MAECompVit(nn.Module):
         # decoder_embed and decoder_pred initialization
         self._init_weights(self.decoder_embed)
         self._init_weights(self.decoder_pred)
-        # init proj for baseline
-        self._init_weights(self.baseline_proj)
 
         # decoder norm init
         nn.init.constant_(self.decoder_norm.bias, 0)
@@ -174,7 +169,6 @@ class MAECompVit(nn.Module):
 
         # Project decoder embed dim to baseline embed dim
         decoder_outputs = self.decoder_pred(decoder_outputs)
-        baseline_outputs = self.baseline_proj(baseline_outputs)
 
         if self.loss == "l2":
             loss = self.l2_loss(baseline_outputs, decoder_outputs)
@@ -238,12 +232,12 @@ class MAECompVit(nn.Module):
     def forward(self, x, xbaseline):
         baseline_outputs = self.forward_baseline(xbaseline)
         encoder_outputs = self.forward_encoder(x)
-        decoder_outputs = self.forward_decoder(encoder_outputs)
+        # decoder_outputs = self.forward_decoder(encoder_outputs)
 
         # L2 of CLS
         baseline_outputs = baseline_outputs[:, 0, :].unsqueeze(1)
-        decoder_outputs = self.decoder_embed(decoder_outputs.mean(dim=1).unsqueeze(1))
-        # decoder_outputs = self.decoder_embed(encoder_outputs.mean(dim=1).unsqueeze(1))
+        # decoder_outputs = self.decoder_embed(decoder_outputs.mean(dim=1).unsqueeze(1))
+        decoder_outputs = self.decoder_embed(encoder_outputs.mean(dim=1).unsqueeze(1))
         
         # encoder_outputs.to(device="cpu")
         loss = self.forward_loss(baseline_outputs, decoder_outputs)

@@ -34,11 +34,12 @@ TRANSFORM = tvt.Compose(
 
 # downsize = tvt.RandomChoice([tvt.Resize(56), tvt.Resize(112), tvt.Resize(224)], p=[0.0,1.0,0.0])
 # downsize = tvt.Resize(112)
-downsize = tvt.Resize(224)
+# downsize = tvt.Resize(56)
 
 def parse_args():
     parser = argparse.ArgumentParser("training and evaluation script")
     parser.add_argument("--dataset", required=True, choices=["cifar10", "cifar100"])
+    parser.add_argument("--downsize", required=True, type=int, default=224)
 
     return parser.parse_args()
 
@@ -59,6 +60,8 @@ def main(args):
     compvit_config = configs["student"]
     hyperparameters = configs["hyperparameters"]
     device = configs["device"]
+
+    downsize = tvt.Resize(args.downsize)
 
     run = wandb.init(
         # set the wandb project where this run will be logged

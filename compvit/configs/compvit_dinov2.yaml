@@ -15,7 +15,7 @@ compvits14:
   num_patches: 256
   num_compressed_tokens: 16
   bottleneck: "mixer_bottleneck_multi"
-  bottleneck_locs: [3, 4]
+  bottleneck_locs: [5, 6]
 
 compvitb14:
   img_size: 518
