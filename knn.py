@@ -1,6 +1,6 @@
 import torch
 import torchvision.transforms as tvt
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, SequentialSampler
 from torchvision.datasets import CIFAR10, CIFAR100
 from tqdm import tqdm
 from dinov2.factory import dinov2_factory
@@ -19,21 +19,22 @@ model, _ = dinov2_factory('dinov2_vits14')
 model.load_state_dict(torch.load("dinov2/checkpoints/dinov2_vits14_pretrain.pth"))
 model = model.to(device="cuda")
 
-train_dataset = CIFAR100("toy_experiments/data",train=False, transform=TRANSFORM, download=True)
+train_dataset = CIFAR100("toy_experiments/data",train=True, transform=TRANSFORM, download=True)
 train_loader = DataLoader(
         train_dataset,
         batch_size=256,
         shuffle=True,
         num_workers=8,
+        sampler=SequentialSampler(train_dataset)
 )
 
 
 embeddings = torch.tensor([])
 for data, _ in tqdm(train_loader):
-    data = data.to("cuda")
+    data = data.to("mps")
     with torch.no_grad():
         outputs = model(data, is_training=True)
-        embedding = model.norm(outputs['x_prenorm'])
+        embedding = model.norm(outputs['x_norm_clstoken'])
         B, N, C = embedding.shape
         embedding = embedding.view(B, -1).cpu()
         embeddings = torch.cat([embeddings, embedding], dim=0)
