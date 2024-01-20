@@ -1,0 +1,22 @@
+teacher:
+  name: dinov2_vits14
+  checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
+
+student:
+  name: compvits14
+  checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
+  decoder_checkpoint: ""
+
+hyperparameters:
+  lr: 5.0E-03
+  min_lr: 1.0e-8
+  warmup_lr_scale: 1.0e-4
+  warmup_epochs: 10
+  batch_size: 256
+  num_workers: 8
+  epochs: 200
+  mixup_alpha: 0.8 
+  accumulations: 2
+
+args:
+  data_dir: "./datasets/data"

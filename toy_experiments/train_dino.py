@@ -65,7 +65,6 @@ def create_dataset(args):
         test_dataset = CIFAR100(
             DATA_PATH, transform=TRANSFORM_TEST, train=False, download=True
         )
-        pass
     return train_dataset, test_dataset
 
 
