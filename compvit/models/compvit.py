@@ -120,7 +120,7 @@ class CompViT(DinoVisionTransformer):
                 bottleneck=bottleneck,
             )
 
-    def forward_features(self, x, masks=None):
+    def forward_features(self, x, masks=None, get_attn=False):
         if isinstance(x, list):
             return self.forward_features_list(x, masks)
 
@@ -129,7 +129,7 @@ class CompViT(DinoVisionTransformer):
         for i, blk in enumerate(self.blocks):
             if self.compress and i in self.bottleneck_locs:
                 if i == self.bottleneck_locs[0]:
-                    x = self.compressor(x)
+                    x = self.compressor(x, get_attn)
                 else:
                     continue
             else:

@@ -5,11 +5,13 @@ from dinov2.layers.block import Block
 
 
 class CompBlock(Block):
-    def forward(self, x_or_x_list, compressed_tokens):
+    def forward(self, x_or_x_list, compressed_tokens, get_attn=False):
         def attn_residual_func(x: Tensor, compressed_tokens: Tensor) -> Tensor:
             x = self.norm1(x)
             compressed_tokens = self.norm1(compressed_tokens)
-            return self.ls1(self.attn(x, compressed_tokens))
+            compressed_tokens, attn_map = self.attn(x, compressed_tokens, get_attn)
+            return self.ls1(compressed_tokens)
+            # return self.ls1(self.attn(x, compressed_tokens, get_attn))
 
         def ffn_residual_func(x: Tensor) -> Tensor:
             return self.ls2(self.mlp(self.norm2(x)))

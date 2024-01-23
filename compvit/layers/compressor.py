@@ -79,7 +79,7 @@ class Compressor(nn.Module):
     def init_weights(self):
         nn.init.normal_(self.global_center, std=1e-6)
 
-    def forward(self, x):
+    def forward(self, x, get_attn=False):
         B, N, C = x.shape
 
         # Compressing tokens
@@ -87,11 +87,11 @@ class Compressor(nn.Module):
 
         # Transfer to compressed tokens
         x = torch.concat([x, compressed_tokens], dim=1)
-        compressed_tokens = self.block_1(x, compressed_tokens)
+        compressed_tokens = self.block_1(x, compressed_tokens, get_attn)
 
         # Refine compressed tokens
         # x = torch.concat([x, compressed_tokens], dim=1)
-        compressed_tokens = self.block_2(x, compressed_tokens + self.global_center)
+        compressed_tokens = self.block_2(x, compressed_tokens + self.global_center, get_attn)
 
         return compressed_tokens
 

@@ -23,7 +23,7 @@ class CrossAttention(nn.Module):
         self.proj = nn.Linear(dim, dim, bias=proj_bias)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x: Tensor, compressed_tokens: Tensor) -> Tensor:
+    def forward(self, x: Tensor, compressed_tokens: Tensor, get_attn=False) -> Tensor:
         B, N, C = x.shape
         Br, Nr, Cr = compressed_tokens.shape
 
@@ -39,7 +39,11 @@ class CrossAttention(nn.Module):
         x = (attn @ v).transpose(1, 2).reshape(B, Nr, Cr)
         x = self.proj(x)
         x = self.proj_drop(x)
-        return x
+
+        if get_attn:
+            return x, attn
+
+        return x, None
     
 if __name__ == "__main__":
     attn = CrossAttention(384, 8, True)
