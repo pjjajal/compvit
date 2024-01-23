@@ -177,57 +177,7 @@ class MAECompVit(nn.Module):
         return loss
 
     def l2_loss(self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor):
-        # baseline_outputs_norm = (
-        #     baseline_outputs - baseline_outputs.mean(0)
-        # ) / baseline_outputs.std(0)
-        # decoder_outputs_norm = (
-        #     decoder_outputs - decoder_outputs.mean(0)
-        # ) / decoder_outputs.std(0)
-        return F.smooth_l1_loss(decoder_outputs, baseline_outputs, reduction="mean"), {}
-
-        baseline_outputs_norm = baseline_outputs
-        decoder_outputs_norm = decoder_outputs
-
-        mean = baseline_outputs.mean(dim=-1, keepdim=True)
-        var = baseline_outputs.var(dim=-1, keepdim=True)
-        baseline_outputs_norm = (baseline_outputs - mean) / (var + 1.0e-6) ** 0.5
-
-        # L2 norm over dim
-        # loss = (
-        #     (baseline_outputs_norm - decoder_outputs_norm).norm(p="fro", dim=-1)
-        # )
-        # loss = (
-        #     (baseline_outputs_norm - decoder_outputs_norm).pow(2).sum(dim=(1, 2))
-        #     / self.num_patches
-        # ).mean()
-        loss = (
-            (decoder_outputs_norm - baseline_outputs_norm).pow(2).sum(dim=(1, 2)).mean()
-        )
-        return loss, {}
-
-    def barlow_loss(
-        self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor
-    ):
-        B, N, C = baseline_outputs.shape
-
-        baseline_outputs_norm = (
-            baseline_outputs - baseline_outputs.mean(0)
-        ) / baseline_outputs.std(0)
-        decoder_outputs_norm = (
-            decoder_outputs - decoder_outputs.mean(0)
-        ) / decoder_outputs.std(0)
-
-        # Similar to Barlow but we correlate over the token dimension.
-        c = baseline_outputs_norm @ decoder_outputs_norm.mT / C
-
-        c_diff = (c.diagonal().T - 1).pow(2)
-
-        off_diag = (c.triu() + c.tril()).pow(2) * self.tradeoff
-
-        c_diff = c_diff.sum(-1)
-        off_diag = off_diag.sum((-2, -1))
-        loss = (c_diff + off_diag).mean()
-        return loss, {"c_diff": c_diff, "off_diag": off_diag}
+        return F.smooth_l1_loss(decoder_outputs, baseline_outputs, reduction="mean")
 
     def forward(self, x, xbaseline):
         baseline_outputs = self.forward_baseline(xbaseline)

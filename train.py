@@ -17,6 +17,8 @@ from datasets import create_dataset
 from dinov2.factory import dinov2_factory
 
 
+torch.set_float32_matmul_precision("medium")
+
 CONFIG_PATH = Path("./configs")
 CHECKPOINTS_PATH = Path("./checkpoints")
 
@@ -91,6 +93,7 @@ def main(args):
         batch_size=hyperparameters["batch_size"],
         shuffle=True,
         num_workers=hyperparameters["num_workers"],
+        pin_memory=True
     )
 
     # Setup dataloader on Fabric.
@@ -140,11 +143,11 @@ def main(args):
     lowest_batch_loss = 1e6
     for epoch in range(hyperparameters["epochs"]):
         running_loss = 0.0
-        for i, (img, label) in enumerate(train_loader):
+        for i, (img, label) in enumerate(tqdm(train_loader)):
             is_accumulating = (i + 1) % hyperparameters["accumulations"] != 0
             with fabric.no_backward_sync(mae, enabled=is_accumulating):
                 # Forward pass.
-                loss, other_loss = mae(img, downsize(img))
+                loss = mae(img, downsize(img))
                 # Running loss.
                 running_loss += loss.detach().item()
                 # Backward pass.
@@ -157,7 +160,7 @@ def main(args):
 
         # Logging
         print(
-            f"batch loss: {batch_loss}, , lr: {optimizer.param_groups[0]['lr']}, {other_loss}"
+            f"batch loss: {batch_loss}, , lr: {optimizer.param_groups[0]['lr']}"
         )
         wandb.log({"train loss": batch_loss, "lr": optimizer.param_groups[0]["lr"]})
 
@@ -184,7 +187,8 @@ if __name__ == "__main__":
 
     save_loc = CHECKPOINTS_PATH / now
     if not save_loc.exists():
-        save_loc.mkdir(parents=True)
+        save_loc.mkdir(parents=True, exist_ok=True)
 
     args.save_loc = save_loc
+    args.pretraining = True
     main(args)
