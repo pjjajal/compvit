@@ -64,6 +64,7 @@ class FeatureKD(nn.Module):
         h_t = self.forward_teacher(x_teacher)
         h_s = self.forward_student(x_student)
 
+        # Flatten embeddings
         h_t = self.flatten(h_t)
         h_s = self.flatten(h_s)
 
