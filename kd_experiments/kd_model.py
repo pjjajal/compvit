@@ -35,6 +35,7 @@ class FeatureKD(nn.Module):
 
         # Projection layer from student feature dimension to teacher feature dimension.
         self.teacher_proj = nn.Linear(dim_s, dim_t)
+        self.flatten = nn.Flatten(1)
 
     def training_parameters(self):
         parameters = []
@@ -62,6 +63,9 @@ class FeatureKD(nn.Module):
         # Get feature embeddings
         h_t = self.forward_teacher(x_teacher)
         h_s = self.forward_student(x_student)
+
+        h_t = self.flatten(h_t)
+        h_s = self.flatten(h_s)
 
         # Project student features to teacher dimension.
         h_s = self.teacher_proj(h_s)
