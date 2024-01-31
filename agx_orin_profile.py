@@ -62,7 +62,7 @@ if __name__ == "__main__":
     device = torch.device(args.device)
 
     ### Load model
-    model, config = compvit_factory(model_name='compvitg14')
+    model, config = compvit_factory(model_name=args.model_name)
     model.to(device).eval()
 
     ### Create torch.profiler instance
