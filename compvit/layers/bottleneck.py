@@ -47,7 +47,7 @@ def mixer_bottleneck_multi_v2(
         def __init__(self) -> None:
             super().__init__()
             self.block = nn.Sequential(
-                nn.Linear(num_tokens * ratio, num_tokens * ratio),
+                nn.Conv1d(num_tokens * ratio, num_tokens * ratio, 1),
                 nn.LayerNorm(dim),
                 nn.GELU(),
             )
@@ -61,7 +61,7 @@ def mixer_bottleneck_multi_v2(
             self.mixer_1 = MixerBlock(dim, num_tokens)
             # Non-linear projection from num_tokens -> num_tokens * ratio
             self.up_block = nn.Sequential(
-                nn.Linear(num_tokens, num_tokens * ratio), nn.LayerNorm(dim), nn.GELU()
+                nn.Conv1d(num_tokens, num_tokens * ratio, 1), nn.LayerNorm(dim), nn.GELU()
             )
 
             self.bottleneck_blocks = nn.Sequential(
@@ -70,7 +70,7 @@ def mixer_bottleneck_multi_v2(
 
             # Non-linear projection from num_tokens * ratio -> num_compressed_tokens
             self.down_block = nn.Sequential(
-                nn.Linear(num_tokens * ratio, num_compressed_tokens),
+                nn.Conv1d(num_tokens * ratio, num_compressed_tokens, 1),
                 nn.LayerNorm(dim),
                 nn.GELU(),
             )

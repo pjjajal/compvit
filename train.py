@@ -114,7 +114,7 @@ def main(args):
         mae.decoder.load_state_dict(torch.load(decoder_checkpoint))
 
     # Update W&B run metadata.
-    run.config.update(**config)
+    run.config.update(config)
 
     # Create optimizer and scheduler.
     optimizer = optim.AdamW(

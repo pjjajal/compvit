@@ -4,8 +4,8 @@ teacher:
 
 student:
   name: compvits14
-  # checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
-  checkpoint: "checkpoints/mae_2024-01-20-181842/best_performing.pth"
+  checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
+  # checkpoint: "checkpoints/mae_2024-01-20-181842/best_performing.pth"
   decoder_checkpoint: ""
 
 hyperparameters:
@@ -14,8 +14,8 @@ hyperparameters:
   warmup_lr_scale: 1.0e-4
   warmup_epochs: 10
   batch_size: 1024
-  num_workers: 16
-  epochs: 150
+  num_workers: 32
+  epochs: 200
   mixup_alpha: 0.8 
   accumulations: 4
 
