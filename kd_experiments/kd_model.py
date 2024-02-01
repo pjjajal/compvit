@@ -49,6 +49,7 @@ class FeatureKD(nn.Module):
         elif self.loss == "l2":
             return F.mse_loss(h_teacher, h_student, reduction="mean")
 
+    @torch.no_grad()
     def forward_teacher(self, x):
         h = self.teacher.features(x)
         h = self.teacher.avgpool(h)

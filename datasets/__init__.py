@@ -13,7 +13,7 @@ def create_dataset(args):
             create_imagenet_dataset(
                 split="val", data_dir=args.data_dir, pretraining=args.pretraining
             )
-            if args.pretraining
+            if not args.pretraining
             else None
         )
     elif args.dataset == "cifar100":

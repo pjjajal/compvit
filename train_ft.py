@@ -53,12 +53,12 @@ def parse_args():
     return parser.parse_args()
 
 
-def evaluate(testloader, model, head):
+def evaluate(test_loader, model, head):
     correct = 0
     total = 0
     elapsed_time = 0.0
     with torch.no_grad():
-        for data in tqdm(testloader):
+        for data in tqdm(test_loader):
             images, labels = data
             images = images.to("cuda")
             labels = labels.to("cuda")
@@ -81,7 +81,7 @@ def evaluate(testloader, model, head):
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-    return correct / total, elapsed_time / len(testloader)
+    return correct / total, elapsed_time / len(test_loader)
 
 def main(args):
     config_path = CONFIG_PATH / (args.dataset + "_dino" + ".yaml")
@@ -124,12 +124,13 @@ def main(args):
         shuffle=True,
         num_workers=hyperparameters["num_workers"],
         pin_memory=True,
+        drop_last=True
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=hyperparameters["test_batch_size"],
         shuffle=False,
-        num_workers=1,
+        num_workers=2,
     )
 
     # Setup dataloader on Fabric.
@@ -174,7 +175,6 @@ def main(args):
         parameters,
         lr=hyperparameters["lr"],
         weight_decay=0.05,
-        # fused=True
     )
     if args.model == "compvit" and not args.head:
         cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
@@ -199,6 +199,7 @@ def main(args):
 
     # EVAL STUFF ########
     if args.eval:
+        print("Evaluating")
         val_acc, inf_time = evaluate(test_loader, model, head)
         print(f"val acc: {val_acc}, inf time: {inf_time}")
         wandb.log({"val_acc": val_acc, "inf time": inf_time, "eval": True})

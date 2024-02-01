@@ -14,11 +14,11 @@ from tqdm import tqdm
 from .datasets.imagenet import create_imagenet_dataset
 from .kd_model import FeatureKD
 
-# import wandb
+import wandb
 
 torch.set_float32_matmul_precision("medium")
 
-CHECKPOINTS_PATH = Path("./checkpoints")
+CHECKPOINTS_PATH = Path("./kd_experiments/checkpoints")
 
 
 def parse_args():
@@ -71,6 +71,16 @@ def main(args):
     )
     fabric.launch()
 
+    # Setup W&B.
+    run = wandb.init(
+        # set the wandb project where this run will be logged
+        project="kd-rcac",
+        # track hyperparameters and run metadata
+        config={
+            **vars(args),
+        },
+    )
+
     # Create dataset and train loader.
     train_dataset = create_imagenet_dataset(split="train", data_dir=args.data_dir, pretraining=True)
     train_loader = DataLoader(
@@ -79,6 +89,7 @@ def main(args):
         shuffle=True,
         num_workers=args.num_workers,
         pin_memory=True,
+        drop_last=True
     )
 
     # Setup dataloader on Fabric.
@@ -127,7 +138,7 @@ def main(args):
         print(
             f"batch loss: {batch_loss}, , lr: {optimizer.param_groups[0]['lr']}"
         )
-        # wandb.log({"train loss": batch_loss, "lr": optimizer.param_groups[0]["lr"]})
+        wandb.log({"train loss": batch_loss, "lr": optimizer.param_groups[0]["lr"]})
 
         # Scheduler Step
         if epoch >= args.warmup_epochs:
@@ -142,7 +153,7 @@ def main(args):
             save_path_pt = args.save_loc / f"best_performing_kd.pth"
             torch.save(model.student.state_dict(), save_path)
             torch.save(model.state_dict(), save_path_pt)
-    # wandb.finish()
+    wandb.finish()
 
 if __name__ == "__main__":
     args = parse_args()
