@@ -10,7 +10,12 @@ from dinov2.layers import NestedTensorBlock as Block
 from dinov2.layers import PatchEmbed, SwiGLUFFNFused
 from dinov2.models.vision_transformer import DinoVisionTransformer
 
-from ..layers.bottleneck import mixer_bottleneck, mixer_bottleneck_relu, mixer_bottleneck_multi
+from ..layers.bottleneck import (
+    mixer_bottleneck,
+    mixer_bottleneck_relu,
+    mixer_bottleneck_multi,
+    mixer_bottleneck_multi_v2,
+)
 from ..layers.compressor import Compressor
 
 
@@ -41,9 +46,13 @@ class CompViT(DinoVisionTransformer):
         num_compressed_tokens=0,
         num_patches=256,
         bottleneck: Literal[
-            "mixer_bottleneck", "mixer_bottleneck_relu"
-        ] = "mixer_bottleneck",
+            "mixer_bottleneck",
+            "mixer_bottleneck_relu",
+            "mixer_bottleneck_multi",
+            "mixer_bottleneck_multi_v2",
+        ] = "mixer_bottleneck_v2",
         bottleneck_locs=[5, 6],
+        bottleneck_size=1,
     ):
         super().__init__(
             img_size,
@@ -102,7 +111,16 @@ class CompViT(DinoVisionTransformer):
             elif bottleneck == "mixer_bottleneck_relu":
                 bottleneck = partial(mixer_bottleneck_relu, dim=embed_dim)
             elif bottleneck == "mixer_bottleneck_multi":
-                bottleneck = partial(mixer_bottleneck_multi, dim=embed_dim, ratio=mlp_ratio)
+                bottleneck = partial(
+                    mixer_bottleneck_multi, dim=embed_dim, ratio=mlp_ratio
+                )
+            elif bottleneck == "mixer_bottleneck_multi_v2":
+                bottleneck = partial(
+                    mixer_bottleneck_multi_v2,
+                    dim=embed_dim,
+                    ratio=mlp_ratio,
+                    bottleneck_size=bottleneck_size,
+                )
 
             self.compressor = Compressor(
                 dim=embed_dim,

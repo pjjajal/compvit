@@ -35,12 +35,6 @@ class Compressor(nn.Module):
         self.num_tokens = num_tokens
         self.num_compressed_tokens = num_compressed_tokens
         self.bottleneck = bottleneck(self.num_tokens, self.num_compressed_tokens)
-        # self.bottleneck = nn.Sequential(
-        #     MixerBlock(dim, self.num_tokens),
-        #     nn.Conv1d(self.num_tokens, self.num_compressed_tokens, 1),
-        #     nn.GELU(),
-        #     MixerBlock(dim, self.num_compressed_tokens),
-        # )
 
         self.block_1 = CompBlock(
             dim=dim,
