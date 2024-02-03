@@ -17,6 +17,8 @@ from ..layers.bottleneck import (
     mixer_bottleneck_multi_v2,
 )
 from ..layers.compressor import Compressor
+from torch.profiler import profile, record_function, ProfilerActivity
+
 
 
 class CompViT(DinoVisionTransformer):
@@ -144,14 +146,16 @@ class CompViT(DinoVisionTransformer):
 
         x = self.prepare_tokens_with_masks(x, masks)
 
-        for i, blk in enumerate(self.blocks):
-            if self.compress and i in self.bottleneck_locs:
-                if i == self.bottleneck_locs[0]:
-                    x = self.compressor(x, get_attn)
+        with record_function("all"):
+            for i, blk in enumerate(self.blocks):
+                if self.compress and i in self.bottleneck_locs:
+                    if i == self.bottleneck_locs[0]:
+                        with record_function("compressor"):
+                            x = self.compressor(x, get_attn)
+                    else:
+                        continue
                 else:
-                    continue
-            else:
-                x = blk(x)
+                    x = blk(x)
 
         x_norm = self.norm(x)
         return {

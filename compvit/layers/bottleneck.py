@@ -61,7 +61,9 @@ def mixer_bottleneck_multi_v2(
             self.mixer_1 = MixerBlock(dim, num_tokens)
             # Non-linear projection from num_tokens -> num_tokens * ratio
             self.up_block = nn.Sequential(
-                nn.Conv1d(num_tokens, num_tokens * ratio, 1), nn.LayerNorm(dim), nn.GELU()
+                nn.Conv1d(num_tokens, num_tokens * ratio, 1),
+                nn.LayerNorm(dim),
+                nn.GELU(),
             )
 
             self.bottleneck_blocks = nn.Sequential(

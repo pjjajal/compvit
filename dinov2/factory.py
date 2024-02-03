@@ -15,7 +15,7 @@ CONFIG_PATH = Path(os.path.dirname(os.path.abspath(__file__))) / "configs"
 
 def dinov2_factory(
     model_name: Literal[
-        "dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14"
+        "dinov2_vittiny14", "dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14"
     ]
 ):
     config_path = CONFIG_PATH / "dinov2.yaml"
