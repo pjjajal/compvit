@@ -15,6 +15,7 @@ from typing import Any, List, Tuple, Iterator
 
 ### CompViT
 from compvit.factory import compvit_factory
+from dinov2.factory import dinov2_factory
 
 ### Commandline Arguments
 def get_argparser() -> argparse.ArgumentParser:
@@ -23,7 +24,7 @@ def get_argparser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawTextHelpFormatter, add_help=False
     )
 
-    parser.add_argument("--model-name", default="compvitg14", choices=['compvitg14', 'compvitb14', 'compvits14', 'compvitl14'])
+    parser.add_argument("--model-name", default="compvitg14", choices=['compvitg14', 'compvitb14', 'compvits14', 'compvitl14', "dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14"])
 
     parser.add_argument(
         "--batch-size",
@@ -39,6 +40,8 @@ def get_argparser() -> argparse.ArgumentParser:
         default="cuda",
         help="Specifies which device to use for torch operations. Default is cuda",
     )
+
+    parser.add_argument("--no-profile", action="store_true")
 
     return parser
 
@@ -61,33 +64,43 @@ if __name__ == "__main__":
     args = get_argparser().parse_args()
     device = torch.device(args.device)
 
+    ### Parse model name, choose appropriate factory function
+    if "compvit" in args.model_name:
+        print(f"agx_orin_profile.py: Using compvit factory for {args.model_name}")
+        model, config = compvit_factory(model_name=args.model_name)
+    elif "dinov2" in args.model_name:
+        print(f"agx_orin_profile.py: Using dinov2 factory for {args.model_name}")
+        model, config = compvit_factory(model_name=args.model_name)
+    else:
+        raise RuntimeError(f"No factory function available for model {args.model_name}")
+
     ### Load model
-    model, config = compvit_factory(model_name=args.model_name)
     model.to(device).eval()
 
     ### Create torch.profiler instance
-    torchprofiler = torch.profiler.profile(
-        ### Create profiler instance
-        activities=[
-            torch.profiler.ProfilerActivity.CUDA,
-            torch.profiler.ProfilerActivity.CPU,
-        ],
-        schedule=torch.profiler.schedule(
-            wait=1,
-            warmup=4,
-            active=1,
-            repeat=0,
-        ),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler(
-            worker_name=f"agx_orin_profile_{args.model_name}_batch_size_{args.batch_size}",
-            dir_name="data/",
-        ),
-        record_shapes=True,
-        with_stack=True,
-        with_flops=True,
-        with_modules=True,
-    )
-    torchprofiler.start()
+    if args.no_profile:
+        torchprofiler = torch.profiler.profile(
+            ### Create profiler instance
+            activities=[
+                torch.profiler.ProfilerActivity.CUDA,
+                torch.profiler.ProfilerActivity.CPU,
+            ],
+            schedule=torch.profiler.schedule(
+                wait=1,
+                warmup=4,
+                active=1,
+                repeat=0,
+            ),
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(
+                worker_name=f"agx_orin_profile_{args.model_name}_batch_size_{args.batch_size}",
+                dir_name="data/",
+            ),
+            record_shapes=True,
+            with_stack=True,
+            with_flops=True,
+            with_modules=True,
+        )
+        torchprofiler.start()
 
     ### Turn off gradient compute
     with torch.no_grad():
@@ -98,14 +111,15 @@ if __name__ == "__main__":
         latency_ms = benchmark_compvit_milliseconds(rand_x, model)
         print("agx_orin_profile.py: Median latency is {:.2f} ms".format(latency_ms))
 
-        ### Now do torch.profiler(...)
-        print("agx_orin_profile.py: Applying torch.profiler...")
+        if not args.no_profile:
+            ### Now do torch.profiler(...)
+            print("agx_orin_profile.py: Applying torch.profiler...")
 
-        ### Do some steps
-        for k in range(6):
-            model(rand_x)
-            torchprofiler.step()
-            print(f"agx_oring_profile.py: Step {k}")
+            ### Do some steps
+            for k in range(6):
+                model(rand_x)
+                torchprofiler.step()
+                print(f"agx_oring_profile.py: Step {k}")
     
     torchprofiler.stop()
     print("agx_orin_profile.py: Done!")
