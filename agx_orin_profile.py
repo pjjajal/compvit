@@ -70,7 +70,7 @@ if __name__ == "__main__":
         model, config = compvit_factory(model_name=args.model_name)
     elif "dinov2" in args.model_name:
         print(f"agx_orin_profile.py: Using dinov2 factory for {args.model_name}")
-        model, config = compvit_factory(model_name=args.model_name)
+        model, config = dinov2_factory(model_name=args.model_name)
     else:
         raise RuntimeError(f"No factory function available for model {args.model_name}")
 
