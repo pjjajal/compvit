@@ -105,7 +105,7 @@ if __name__ == "__main__":
     ### Turn off gradient compute
     with torch.no_grad():
         ### Run Benchmark for latency, then do torch profiling!
-        rand_x = torch.randn(size=(1, 3, 224, 224), dtype=torch.float32, device=device)
+        rand_x = torch.randn(size=(args.batch_size, 3, 224, 224), dtype=torch.float32, device=device)
 
         ### Record latency with benchmark utility
         latency_ms = benchmark_compvit_milliseconds(rand_x, model)
