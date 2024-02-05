@@ -110,9 +110,9 @@ if __name__ == "__main__":
 
         ### Record latency with benchmark utility
         latency_measurement = benchmark_compvit_milliseconds(rand_x, model)
-        latency_mean = latency_measurement.mean
-        latency_median = latency_measurement.median
-        latency_iqr = latency_measurement.iqr
+        latency_mean = latency_measurement.mean * 1e3
+        latency_median = latency_measurement.median * 1e3
+        latency_iqr = latency_measurement.iqr * 1e3
 
         print("agx_orin_profile.py: Mean/Median/IQR latency (ms) is {:.2f} | {:.2f} | {:.2f} ".format(latency_mean, latency_median, latency_iqr))
 
