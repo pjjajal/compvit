@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.mlp_mixer import MixerBlock
+import torch.utils.benchmark as benchmark
 
 
 def mixer_bottleneck(num_tokens, num_compressed_tokens, dim):
@@ -87,3 +88,75 @@ def mixer_bottleneck_multi_v2(
             return x
 
     return Net()
+
+
+def conv_bottleneck(num_tokens, num_compressed_tokens, dim, ratio, bottleneck_size):
+    class Permute(nn.Module):
+        def __init__(self, dims) -> None:
+            super().__init__()
+            self.dims = dims
+
+        def forward(self, x):
+            return x.permute(self.dims)
+
+    class NeXtBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.blocks = nn.Sequential(
+                nn.Conv2d(
+                    in_channels=dim,
+                    out_channels=dim,
+                    kernel_size=7,
+                    padding="same",
+                    groups=dim,
+                ),
+                Permute((0, 2, 3, 1)),
+                nn.LayerNorm(dim),
+                nn.Linear(in_features=dim, out_features=dim * ratio),
+                nn.GELU(),
+                nn.Linear(in_features=dim * ratio, out_features=dim),
+                Permute((0, 3, 1, 2)),
+            )
+
+        def forward(self, x):
+            return x + self.blocks(x)
+
+    class Net(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.blocks = nn.Sequential(*[NeXtBlock() for _ in range(bottleneck_size)])
+            self.pooling = nn.AdaptiveAvgPool2d(int(num_compressed_tokens**0.5))
+
+        def forward(self, x):
+            B, N, C = x.shape
+            H = W = int(N**0.5)
+
+            x = x.mT.reshape((B, C, H, W))
+            x = self.blocks(x)
+            x = self.pooling(x)
+            x = x.reshape((B, C, num_compressed_tokens))
+            return x
+
+    return Net()
+
+
+if __name__ == "__main__":
+    net = conv_bottleneck(256, 16, 786, 1, 1)
+    print(net(torch.randn(32, 256, 786)).shape)
+
+    x = torch.randn(32, 256, 786).to('mps')
+    t0 = benchmark.Timer(
+        stmt="net(x)",
+        setup="from __main__ import conv_bottleneck; net = conv_bottleneck(256, 16, 786, 4, 1).to('mps')",
+        globals={"x": x},
+        num_threads=1
+    )
+
+    t1 = benchmark.Timer(
+        stmt="net(x)",
+        setup="from __main__ import mixer_bottleneck_multi_v2; net = mixer_bottleneck_multi_v2(256, 16, 786, 4, 1).to('mps')",
+        globals={"x": x},
+        num_threads=1
+    )
+    print(t0.timeit(100).median)
+    print(t1.timeit(100).median)

@@ -58,12 +58,7 @@ def benchmark_compvit_milliseconds(x : torch.Tensor, model : torch.nn.Module) ->
         num_threads=1,
     )
 
-    return t0.blocked_autorange(min_run_time=4.0)
-
-### Secondary benchmark function - naive timing, but should be perfectly fine for large numbers of iteations
-def benchmark_naive_milliseconds(x : torch.Tensor, model : torch.nn.Module) -> float:
-    N = 128
-    pass
+    return t0.blocked_autorange(min_run_time=8.0).median * 1e3
 
 if __name__ == "__main__":
     ### Get args, device
@@ -111,7 +106,7 @@ if __name__ == "__main__":
     ### Turn off gradient compute
     with torch.no_grad():
         ### Run Benchmark for latency, then do torch profiling!
-        rand_x = torch.randn(size=(1, 3, 224, 224), dtype=torch.float32, device=device)
+        rand_x = torch.randn(size=(args.batch_size, 3, 224, 224), dtype=torch.float32, device=device)
 
         ### Record latency with benchmark utility
         latency_measurement = benchmark_compvit_milliseconds(rand_x, model)
