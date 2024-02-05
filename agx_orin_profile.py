@@ -57,7 +57,7 @@ def benchmark_compvit_milliseconds(x : torch.Tensor, model : torch.nn.Module) ->
         num_threads=1,
     )
 
-    return t0.blocked_autorange(min_run_time=4.0).median * 1e3
+    return t0.blocked_autorange(min_run_time=8.0).median * 1e3
 
 if __name__ == "__main__":
     ### Get args, device
