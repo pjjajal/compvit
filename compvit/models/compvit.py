@@ -154,15 +154,14 @@ class CompViT(DinoVisionTransformer):
 
         x = self.prepare_tokens_with_masks(x, masks)
 
-        with record_function("all"):
-            for i, blk in enumerate(self.blocks):
-                if self.compress and i in self.bottleneck_locs:
-                    if i == self.bottleneck_locs[0]:
-                        x = self.compressor(x, get_attn)
-                    else:
-                        continue
+        for i, blk in enumerate(self.blocks):
+            if self.compress and i in self.bottleneck_locs:
+                if i == self.bottleneck_locs[0]:
+                    x = self.compressor(x, get_attn)
                 else:
-                    x = blk(x)
+                    continue
+            else:
+                x = blk(x)
 
         x_norm = self.norm(x)
         return {
