@@ -12,6 +12,7 @@ import torch.utils.benchmark as bench
 ### Python STDLIB
 import argparse
 from typing import Any, List, Tuple, Iterator
+import timeit
 
 ### CompViT
 from compvit.factory import compvit_factory
@@ -46,7 +47,7 @@ def get_argparser() -> argparse.ArgumentParser:
     return parser
 
 ### Create a benchmark function (very simple)
-def benchmark_compvit_milliseconds(x : torch.Tensor, model : torch.nn.Module) -> float:
+def benchmark_compvit_milliseconds(x : torch.Tensor, model : torch.nn.Module) -> Any:
     ### Do the benchmark!
     t0 = bench.Timer(
         stmt=f"model.forward(x)",
@@ -57,7 +58,7 @@ def benchmark_compvit_milliseconds(x : torch.Tensor, model : torch.nn.Module) ->
         num_threads=1,
     )
 
-    return t0.blocked_autorange(min_run_time=4.0).median * 1e3
+    return t0.blocked_autorange(min_run_time=8.0)
 
 if __name__ == "__main__":
     ### Get args, device
@@ -105,11 +106,15 @@ if __name__ == "__main__":
     ### Turn off gradient compute
     with torch.no_grad():
         ### Run Benchmark for latency, then do torch profiling!
-        rand_x = torch.randn(size=(1, 3, 224, 224), dtype=torch.float32, device=device)
+        rand_x = torch.randn(size=(args.batch_size, 3, 224, 224), dtype=torch.float32, device=device)
 
         ### Record latency with benchmark utility
-        latency_ms = benchmark_compvit_milliseconds(rand_x, model)
-        print("agx_orin_profile.py: Median latency is {:.2f} ms".format(latency_ms))
+        latency_measurement = benchmark_compvit_milliseconds(rand_x, model)
+        latency_mean = latency_measurement.mean * 1e3
+        latency_median = latency_measurement.median * 1e3
+        latency_iqr = latency_measurement.iqr * 1e3
+
+        print("agx_orin_profile.py: Mean/Median/IQR latency (ms) is {:.2f} | {:.2f} | {:.2f} ".format(latency_mean, latency_median, latency_iqr))
 
         if not args.no_profile:
             ### Now do torch.profiler(...)
