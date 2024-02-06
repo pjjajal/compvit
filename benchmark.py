@@ -4,14 +4,15 @@ import warnings
 warnings.filterwarnings(action="ignore", category=UserWarning)
 
 import argparse
-from typing import Any, Iterator, List, Tuple
+from typing import Any, Literal
 
 import torch
 import torch.utils.benchmark as bench
-from torch.profiler import ProfilerActivity, profile, record_function
 
 from compvit.factory import compvit_factory
 from dinov2.factory import dinov2_factory
+
+import textwrap
 
 
 def parse_args():
@@ -32,8 +33,49 @@ def parse_args():
     )
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--device", choices=["cuda", "cpu", "mps"])
+    parser.add_argument("--all-compvit", action="store_true")
+    parser.add_argument("--all-dino", action="store_true")
 
     return parser.parse_args()
+
+
+def colour_text(
+    text,
+    colour_code: Literal[
+        "black",
+        "red",
+        "green",
+        "yellow",
+        "blue",
+        "magenta",
+        "cyan",
+        "white",
+        "reset",
+    ],
+    *args,
+    **kwargs,
+):
+    colour_codes = {
+        "black": "\033[90m",
+        "red": "\033[91m",
+        "green": "\033[92m",
+        "yellow": "\033[93m",
+        "blue": "\033[94m",
+        "magenta": "\033[95m",
+        "cyan": "\033[96m",
+        "white": "\033[97m",
+        "reset": "\033[0m",
+    }
+
+    coloured_text = colour_codes[colour_code] + str(text) + colour_codes["reset"]
+    return coloured_text
+
+
+def print_device_info(args):
+    device = torch.device(args.device)
+    if device.type == "cuda":
+        device_name = torch.cuda.get_device_name(0)
+        print(f"{colour_text('Device', 'red')}: {device_name}")
 
 
 ### Create a benchmark function (very simple)
@@ -48,7 +90,98 @@ def benchmark_compvit_milliseconds(x: torch.Tensor, model: torch.nn.Module) -> A
     return t0.blocked_autorange(min_run_time=8.0)
 
 
-def main(args):
+def inference(model, device, batch_size):
+    ### Turn off gradient compute
+    with torch.no_grad():
+        ### Run Benchmark for latency, then do torch profiling!
+        rand_x = torch.randn(
+            size=(batch_size, 3, 224, 224), dtype=torch.float32, device=device
+        )
+
+        ### Record latency with benchmark utility
+        latency_measurement = benchmark_compvit_milliseconds(rand_x, model)
+        latency_mean = latency_measurement.mean * 1e3
+        latency_median = latency_measurement.median * 1e3
+        latency_iqr = latency_measurement.iqr * 1e3
+
+    return latency_mean, latency_median, latency_iqr
+
+
+def test_dino(args):
+    dino_models = [
+        "dinov2_vits14",
+        "dinov2_vitb14",
+        "dinov2_vitl14",
+        "dinov2_vitg14",
+    ]
+
+    ### Get args, device
+    device = torch.device(args.device)
+
+    # Measure dino models.
+    for model_name in dino_models:
+        model, config = dinov2_factory(model_name=model_name)
+
+        model = model.to(device).eval()
+        latency_mean, latency_median, latency_iqr = inference(
+            model, device, args.batch_size
+        )
+
+        message = f"""\
+        ========================
+        {colour_text(model_name.upper(), 'green')}
+        {colour_text("Parameters", 'cyan')}: {sum(p.numel() for p in model.parameters()):,}
+        {colour_text("Depth", 'cyan')}: {config['depth']}
+        {colour_text("Embedding Dim", 'cyan')}: {config['embed_dim']}
+        {colour_text("Mean (ms)", "magenta")}: {latency_mean:.2f} 
+        {colour_text("Median (ms)", "magenta")}: {latency_median:.2f}
+        {colour_text("IQR (ms)", "magenta")}: {latency_iqr:.2f}
+        ========================\
+        """
+        message = textwrap.dedent(message)
+
+        print(message)
+
+
+def test_compvit(args):
+    compvit_models = [
+        "compvits14",
+        "compvitb14",
+        "compvitl14",
+        "compvitg14",
+    ]
+
+    ### Get args, device
+    device = torch.device(args.device)
+
+    for model_name in compvit_models:
+        model, config = compvit_factory(model_name=model_name)
+        model = model.to(device).eval()
+        latency_mean, latency_median, latency_iqr = inference(
+            model, device, args.batch_size
+        )
+
+        message = f"""\
+        ========================
+        {colour_text(model_name.upper(), 'green')}
+        {colour_text("Parameters", 'cyan')}: {sum(p.numel() for p in model.parameters()):,}
+        {colour_text("Depth", 'cyan')}: {config['depth']}
+        {colour_text("Embedding Dim", 'cyan')}: {config['embed_dim']}
+        {colour_text("num_compressed_tokens", 'cyan')}: {config['num_compressed_tokens']}
+        {colour_text("bottleneck_locs", 'cyan')}: {config['bottleneck_locs']}
+        {colour_text("bottleneck_size", 'cyan')}: {config['bottleneck_size']}
+        {colour_text("bottleneck", 'cyan')}: {config['bottleneck']}
+        {colour_text("Mean (ms)", "magenta")}: {latency_mean:.2f} 
+        {colour_text("Median (ms)", "magenta")}: {latency_median:.2f}
+        {colour_text("IQR (ms)", "magenta")}: {latency_iqr:.2f}
+        ========================\
+        """
+        message = textwrap.dedent(message)
+
+        print(message)
+
+
+def test_single(args):
     ### Get args, device
     device = torch.device(args.device)
 
@@ -65,24 +198,34 @@ def main(args):
     ### Load model
     model.to(device).eval()
     print(f"# of parameters: {sum(p.numel() for p in model.parameters()):_}")
-    ### Turn off gradient compute
-    with torch.no_grad():
-        ### Run Benchmark for latency, then do torch profiling!
-        rand_x = torch.randn(
-            size=(args.batch_size, 3, 224, 224), dtype=torch.float32, device=device
-        )
 
-        ### Record latency with benchmark utility
-        latency_measurement = benchmark_compvit_milliseconds(rand_x, model)
-        latency_mean = latency_measurement.mean * 1e3
-        latency_median = latency_measurement.median * 1e3
-        latency_iqr = latency_measurement.iqr * 1e3
+    # Inference
+    latency_mean, latency_median, latency_iqr = inference(
+        model, device, args.batch_size
+    )
+    print(
+        f"{args.model}| Mean/Median/IQR latency (ms) is {latency_mean:.2f} | {latency_median:.2f} | {latency_iqr:.2f}"
+    )
 
-        print(
-            f"{args.model}| Mean/Median/IQR latency (ms) is {latency_mean:.2f} | {latency_median:.2f} | {latency_iqr:.2f}"
-        )
+
+def main():
+    args = parse_args()
+
+    print_device_info(args)
+
+    testing_multiple = args.all_dino or args.all_compvit
+    if testing_multiple:
+        if args.all_dino:
+            print(f"{colour_text(f'Benchmarking DINOv2 Models @ batch size = {args.batch_size}.', 'yellow')}")
+            test_dino(args)
+        if args.all_compvit:
+            print(f"{colour_text(f'Benchmarking CompViT Models  @ batch size = {args.batch_size}.', 'yellow')}")
+            test_compvit(args)
+        return 0
+
+    test_single(args)
+    return 0
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    main(args)
+    main()
