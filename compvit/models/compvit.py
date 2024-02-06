@@ -98,7 +98,7 @@ class CompViT(DinoVisionTransformer):
 
         self.total_tokens = num_patches + self.num_tokens + self.num_register_tokens
         # self.total_tokens = num_patches
-        self.num_compressed_tokens = num_compressed_tokens
+        self.num_compressed_tokens = num_compressed_tokens + 1 # Add CLS Token
 
         # Add compressor.
         if num_compressed_tokens:
@@ -143,7 +143,7 @@ class CompViT(DinoVisionTransformer):
                 act_layer=act_layer,
                 ffn_layer=ffn_layer,
                 init_values=init_values,
-                num_compressed_tokens=num_compressed_tokens,
+                num_compressed_tokens=self.num_compressed_tokens,
                 num_tokens=self.total_tokens,
                 bottleneck=bottleneck,
             )
@@ -158,8 +158,7 @@ class CompViT(DinoVisionTransformer):
             for i, blk in enumerate(self.blocks):
                 if self.compress and i in self.bottleneck_locs:
                     if i == self.bottleneck_locs[0]:
-                        with record_function("compressor"):
-                            x = self.compressor(x, get_attn)
+                        x = self.compressor(x, get_attn)
                     else:
                         continue
                 else:

@@ -130,11 +130,12 @@ def conv_bottleneck(num_tokens, num_compressed_tokens, dim, ratio, bottleneck_si
         def forward(self, x):
             B, N, C = x.shape
             H = W = int(N**0.5)
-
+            cls_token, x = x[:, 0:1, :], x[:, 1:, :]
             x = x.mT.reshape((B, C, H, W))
             x = self.blocks(x)
             x = self.pooling(x)
-            x = x.reshape((B, C, num_compressed_tokens))
+            x = x.reshape((B, -1, C))
+            x = torch.concat([cls_token, x], dim=1)
             return x
 
     return Net()
@@ -144,19 +145,19 @@ if __name__ == "__main__":
     net = conv_bottleneck(256, 16, 786, 1, 1)
     print(net(torch.randn(32, 256, 786)).shape)
 
-    x = torch.randn(32, 256, 786).to('cuda')
+    x = torch.randn(32, 256, 786).to("cuda")
     t0 = benchmark.Timer(
         stmt="net(x)",
         setup="from __main__ import conv_bottleneck; net = conv_bottleneck(256, 16, 786, 4, 1).to('cuda')",
         globals={"x": x},
-        num_threads=1
+        num_threads=1,
     )
 
     t1 = benchmark.Timer(
         stmt="net(x)",
         setup="from __main__ import mixer_bottleneck_multi_v2; net = mixer_bottleneck_multi_v2(256, 16, 786, 4, 1).to('cuda')",
         globals={"x": x},
-        num_threads=1
+        num_threads=1,
     )
     print(t0.timeit(100).median)
     print(t1.timeit(100).median)

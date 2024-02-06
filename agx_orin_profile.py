@@ -116,15 +116,15 @@ if __name__ == "__main__":
 
         print("agx_orin_profile.py: Mean/Median/IQR latency (ms) is {:.2f} | {:.2f} | {:.2f} ".format(latency_mean, latency_median, latency_iqr))
 
-        if not args.no_profile:
-            ### Now do torch.profiler(...)
-            print("agx_orin_profile.py: Applying torch.profiler...")
+        # if not args.no_profile:
+        #     ### Now do torch.profiler(...)
+        #     print("agx_orin_profile.py: Applying torch.profiler...")
 
-            ### Do some steps
-            for k in range(6):
-                model(rand_x)
-                torchprofiler.step()
-                print(f"agx_oring_profile.py: Step {k}")
+        #     ### Do some steps
+        #     for k in range(6):
+        #         model(rand_x)
+        #         torchprofiler.step()
+        #         print(f"agx_oring_profile.py: Step {k}")
     
-    torchprofiler.stop()
+    # torchprofiler.stop()
     print("agx_orin_profile.py: Done!")
