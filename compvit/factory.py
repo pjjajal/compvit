@@ -20,13 +20,21 @@ CONFIG_PATH = Path(os.path.dirname(os.path.abspath(__file__))) / "configs"
 
 
 def compvit_factory(
-    model_name: Literal["compvits14", "compvitb14", "compvitl14", "compvitg14"]
+    model_name: Literal["compvits14", "compvitb14", "compvitl14", "compvitg14"],
+    **kwargs
 ):
     config_path = CONFIG_PATH / "compvit_dinov2.yaml"
+    # Loads the default configuration.
     conf = OmegaConf.load(config_path)
-    return CompViT(
-        block_fn=partial(Block, attn_class=MemEffAttention), **conf[model_name]
-    ), conf[model_name]
+    # kwargs can overwrite the default config. This allows for overriding config defaults.
+    conf = OmegaConf.merge(conf[model_name], kwargs)
+
+    return (
+        CompViT(
+            block_fn=partial(Block, attn_class=MemEffAttention), **conf
+        ),
+        conf,
+    )
 
 
 def mae_factory(
@@ -45,7 +53,7 @@ def mae_factory(
     student, compvit_conf = compvit_factory(student_name)
 
     decoder_layer = nn.TransformerDecoderLayer(
-        d_model=decoder_conf['decoder_dim'],
+        d_model=decoder_conf["decoder_dim"],
         nhead=decoder_conf["nhead"],
         dim_feedforward=int(student.embed_dim * decoder_conf["mlp_ratio"]),
         dropout=0.0,
@@ -63,15 +71,13 @@ def mae_factory(
             decoder=decoder,
             baseline_embed_dim=teacher.embed_dim,
             embed_dim=student.embed_dim,
-            decoder_embed_dim=decoder_conf['decoder_dim'],
+            decoder_embed_dim=decoder_conf["decoder_dim"],
             norm_layer=LayerNorm,
-            loss=conf['loss']
+            loss=conf["loss"],
         ),
         {**dino_conf, **compvit_conf, **decoder_conf},
     )
 
 
 if __name__ == "__main__":
-    mae, _ = mae_factory("dinov2_vits14", "compvits14")
-    # print(mae)
-    mae(torch.randn((3, 3, 112, 112)))
+    compvit_factory("compvits14")
