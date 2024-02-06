@@ -15,6 +15,7 @@ from ..layers.bottleneck import (
     mixer_bottleneck_relu,
     mixer_bottleneck_multi,
     mixer_bottleneck_multi_v2,
+    conv_bottleneck
 )
 from ..layers.compressor import Compressor
 from torch.profiler import profile, record_function, ProfilerActivity
@@ -119,6 +120,13 @@ class CompViT(DinoVisionTransformer):
             elif bottleneck == "mixer_bottleneck_multi_v2":
                 bottleneck = partial(
                     mixer_bottleneck_multi_v2,
+                    dim=embed_dim,
+                    ratio=mlp_ratio,
+                    bottleneck_size=bottleneck_size,
+                )
+            elif bottleneck == "conv_bottleneck":
+                bottleneck = partial(
+                    conv_bottleneck,
                     dim=embed_dim,
                     ratio=mlp_ratio,
                     bottleneck_size=bottleneck_size,

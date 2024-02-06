@@ -59,7 +59,7 @@ def make_classification_eval_transform(
     return tvt.Compose(transforms_list)
 
 
-def create_imagenet_dataset(split: str, data_dir: Path, pretraining: bool = True):
+def create_imagenet_dataset(split: str, data_dir: Path, pretraining: bool = True, eval_transform=None):
     if split == "train":
         _transform = (
             make_classification_train_transform()
@@ -68,6 +68,8 @@ def create_imagenet_dataset(split: str, data_dir: Path, pretraining: bool = True
         )
     elif split == "val":
         _transform = make_classification_eval_transform()
+        if eval_transform:
+            _transform = eval_transform
 
     dataset = ImageNet(data_dir, split, transform=_transform)
     return dataset

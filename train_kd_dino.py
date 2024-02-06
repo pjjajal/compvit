@@ -150,7 +150,6 @@ def main(args):
             with fabric.no_backward_sync(model, enabled=is_accumulating):
                 # Forward pass.
                 loss = model(img, img)
-                print(loss)
                 # Running loss.
                 running_loss += loss.detach().item()
                 # Backward pass.
