@@ -102,12 +102,11 @@ def colour_text(
     return coloured_text
 
 
-def print_device_info(args):
+def device_info(args):
     device = torch.device(args.device)
     device_name = ""
     if device.type == "cuda":
         device_name = torch.cuda.get_device_name(0)
-        print(f"{colour_text('Device', 'red')}: {device_name}")
     return device_name
 
 def export_sweep_data(data: List[Dict[str, Any]], filename):
@@ -153,6 +152,8 @@ def test_dino(args):
     ### Get args, device
     device = torch.device(args.device)
 
+    all_data = []
+
     # Measure dino models.
     for model_name in dino_models:
         model, config = dinov2_factory(model_name=model_name)
@@ -177,6 +178,19 @@ def test_dino(args):
 
         print(message)
 
+        all_data.append(
+            {
+                "Parameters": sum(p.numel() for p in model.parameters()),
+                "Depth": config["depth"],
+                "Embedding Dim": config["embed_dim"],
+                "Mean (ms)": latency_mean,
+                "Median (ms)": latency_median,
+                "IQR (ms)": latency_iqr,
+            }
+        )
+    
+    filename = "_".join([device_info(args).replace(" ", "_"), model_name.replace("_", ""), str(args.batch_size)]) + ".csv"
+    export_sweep_data(all_data, filename)
 
 def test_compvit(args):
     compvit_models = [
@@ -282,7 +296,7 @@ def compvit_sweep(args):
                 "Depth": config["depth"],
                 "Embedding Dim": config["embed_dim"],
                 "num_compressed_tokens": config["num_compressed_tokens"],
-                "bottleneck_locs": config["bottleneck_locs"],
+                "bottleneck_locs": config["bottleneck_locs"][0],
                 "bottleneck_size": config["bottleneck_size"],
                 "bottleneck": config["bottleneck"],
                 "Mean (ms)": latency_mean,
@@ -291,7 +305,7 @@ def compvit_sweep(args):
             }
         )
     
-    filename = "_".join([print_device_info(args).replace(" ", "_"), model_name, str(args.batch_size)]) + ".csv"
+    filename = "_".join([device_info(args).replace(" ", "_"), model_name, str(args.batch_size)]) + ".csv"
     export_sweep_data(all_data, filename)
 
 
@@ -324,7 +338,9 @@ def test_single(args):
 
 def main():
     args = parse_args()
-    print_device_info(args)
+    device_name = device_info(args)
+    print(f"{colour_text('Device', 'red')}: {device_name}")
+
 
     testing_multiple = args.all_dino or args.all_compvit
     if testing_multiple:
