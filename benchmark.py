@@ -189,7 +189,7 @@ def test_dino(args):
             }
         )
     
-    filename = "_".join([device_info(args).replace(" ", "_"), model_name.replace("_", ""), str(args.batch_size)]) + ".csv"
+    filename = "_".join([device_info(args).replace(" ", ""), "dinov2", f"bs{args.batch_size}"]) + ".csv"
     export_sweep_data(all_data, filename)
 
 def test_compvit(args):
@@ -236,19 +236,23 @@ def compvit_sweep(args):
     ### Get args, device
     device = torch.device(args.device)
 
-    token_sweep_iter = [None]
+    # Create iterators for the two dimensions that we can ablate over.
+    # The [None] list is used when we want to fix one dimension.
+    token_sweep_iter = [None] 
     bottleneck_locs_iter = [None]
     if args.token_sweep:
-        token_sweep = args.token_sweep
-        token_sweep_iter = token_sweep
+        token_sweep = args.token_sweep # argparse will output a list.
+        token_sweep_iter = token_sweep # the iterator is a list.
     if args.bottleneck_locs:
-        start, end = args.bottleneck_locs
-        bottleneck_locs_iter = range(start, end + 1)
+        start, end = args.bottleneck_locs # argparse will output a 2 element list
+        bottleneck_locs_iter = range(start, end + 1) # the iterator is a range(...)
 
     all_data = []
+    # Use itertools.product this takes the cartesisan product of the two iterators.
     for bottleneck_loc, compressed_tokens in itertools.product(
         bottleneck_locs_iter, token_sweep_iter
     ):
+        # Control logic to handle the case when ablating over both dimensions and if one is fixed.
         if bottleneck_loc and compressed_tokens:
             model, config = compvit_factory(
                 model_name=model_name,
@@ -266,6 +270,7 @@ def compvit_sweep(args):
                 num_compressed_tokens=compressed_tokens,
             )
 
+        # Standard measurement code.
         model = model.to(device).eval()
         latency_mean, latency_median, latency_iqr = inference(
             model, device, args.batch_size
@@ -305,7 +310,7 @@ def compvit_sweep(args):
             }
         )
     
-    filename = "_".join([device_info(args).replace(" ", "_"), model_name, str(args.batch_size)]) + ".csv"
+    filename = "_".join([device_info(args).replace(" ", ""), model_name.replace("_", ""), f"bs{args.batch_size}"]) + ".csv"
     export_sweep_data(all_data, filename)
 
 
