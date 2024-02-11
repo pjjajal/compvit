@@ -17,6 +17,10 @@ compvits14:
   bottleneck: "conv_bottleneck"
   bottleneck_locs: [5, 6]
   bottleneck_size: 1
+  num_codebook_tokens: 384
+  inv_bottleneck: "inverted_mlp"
+  inv_bottle_size: 1
+  codebook_ratio: 2
 
 compvitb14:
   img_size: 518
@@ -37,6 +41,10 @@ compvitb14:
   bottleneck: "conv_bottleneck"
   bottleneck_locs: [5, 6]
   bottleneck_size: 1
+  num_codebook_tokens: 384
+  inv_bottleneck: "inverted_mlp"
+  inv_bottle_size: 1
+  codebook_ratio: 2
 
 
 compvitl14:
@@ -58,6 +66,11 @@ compvitl14:
   bottleneck: "conv_bottleneck"
   bottleneck_locs: [11, 12]
   bottleneck_size: 1
+  num_codebook_tokens: 384
+  inv_bottleneck: "inverted_mlp"
+  inv_bottle_size: 1
+  codebook_ratio: 2
+
 
 compvitg14:
   img_size: 518
@@ -78,4 +91,8 @@ compvitg14:
   bottleneck: "conv_bottleneck"
   bottleneck_locs: [20, 21]
   bottleneck_size: 1
+  num_codebook_tokens: 384
+  inv_bottleneck: "inverted_mlp"
+  inv_bottle_size: 1
+  codebook_ratio: 2
 

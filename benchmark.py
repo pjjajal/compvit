@@ -46,6 +46,7 @@ def parse_args():
     )
     benchmark_all_group.add_argument("--all-compvit", action="store_true")
     benchmark_all_group.add_argument("--all-dino", action="store_true")
+    benchmark_all_group.add_argument("--filetag", default="", type=str)
 
     sweep_group = parser.add_argument_group(
         title="CompViT Sweep", description="Use these arguments to ablate CompViT."
@@ -109,8 +110,10 @@ def device_info(args):
         device_name = torch.cuda.get_device_name(0)
     return device_name
 
+
 def export_sweep_data(data: List[Dict[str, Any]], filename):
     pd.DataFrame(data).to_csv(filename)
+
 
 ### Create a benchmark function (very simple)
 def benchmark_compvit_milliseconds(x: torch.Tensor, model: torch.nn.Module) -> Any:
@@ -188,9 +191,20 @@ def test_dino(args):
                 "IQR (ms)": latency_iqr,
             }
         )
-    
-    filename = "_".join([device_info(args).replace(" ", ""), "dinov2", f"bs{args.batch_size}"]) + ".csv"
+
+    filename = (
+        "_".join(
+            [
+                device_info(args).replace(" ", ""),
+                "dinov2",
+                f"bs{args.batch_size}",
+                f"{args.filetag}",
+            ]
+        )
+        + ".csv"
+    )
     export_sweep_data(all_data, filename)
+
 
 def test_compvit(args):
     compvit_models = [
@@ -203,6 +217,7 @@ def test_compvit(args):
     ### Get args, device
     device = torch.device(args.device)
 
+    all_data = []
     for model_name in compvit_models:
         model, config = compvit_factory(model_name=model_name)
         model = model.to(device).eval()
@@ -220,6 +235,10 @@ def test_compvit(args):
         {colour_text("bottleneck_locs", 'cyan')}: {config['bottleneck_locs']}
         {colour_text("bottleneck_size", 'cyan')}: {config['bottleneck_size']}
         {colour_text("bottleneck", 'cyan')}: {config['bottleneck']}
+        {colour_text("num_codebook_tokens", 'cyan')}: {config['num_codebook_tokens']}
+        {colour_text("inv_bottleneck", 'cyan')}: {config['inv_bottleneck']}
+        {colour_text("inv_bottle_size", 'cyan')}: {config['inv_bottle_size']}
+        {colour_text("codebook_ratio", 'cyan')}: {config['codebook_ratio']}
         {colour_text("Mean (ms)", "magenta")}: {latency_mean:.2f} 
         {colour_text("Median (ms)", "magenta")}: {latency_median:.2f}
         {colour_text("IQR (ms)", "magenta")}: {latency_iqr:.2f}
@@ -228,6 +247,36 @@ def test_compvit(args):
         message = textwrap.dedent(message)
 
         print(message)
+        all_data.append(
+            {
+                "Parameters": sum(p.numel() for p in model.parameters()),
+                "Depth": config["depth"],
+                "Embedding Dim": config["embed_dim"],
+                "num_compressed_tokens": config["num_compressed_tokens"],
+                "bottleneck_locs": config["bottleneck_locs"][0],
+                "bottleneck_size": config["bottleneck_size"],
+                "bottleneck": config["bottleneck"],
+                "num_codebook_tokens": config["num_codebook_tokens"],
+                "inv_bottleneck": config["inv_bottleneck"],
+                "inv_bottle_size": config["inv_bottle_size"],
+                "codebook_ratio": config["codebook_ratio"],
+                "Mean (ms)": latency_mean,
+                "Median (ms)": latency_median,
+                "IQR (ms)": latency_iqr,
+            }
+        )
+    filename = (
+        "_".join(
+            [
+                device_info(args).replace(" ", ""),
+                "compvit",
+                f"bs{args.batch_size}",
+                f"{args.filetag}",
+            ]
+        )
+        + ".csv"
+    )
+    export_sweep_data(all_data, filename)
 
 
 def compvit_sweep(args):
@@ -238,14 +287,14 @@ def compvit_sweep(args):
 
     # Create iterators for the two dimensions that we can ablate over.
     # The [None] list is used when we want to fix one dimension.
-    token_sweep_iter = [None] 
+    token_sweep_iter = [None]
     bottleneck_locs_iter = [None]
     if args.token_sweep:
-        token_sweep = args.token_sweep # argparse will output a list.
-        token_sweep_iter = token_sweep # the iterator is a list.
+        token_sweep = args.token_sweep  # argparse will output a list.
+        token_sweep_iter = token_sweep  # the iterator is a list.
     if args.bottleneck_locs:
-        start, end = args.bottleneck_locs # argparse will output a 2 element list
-        bottleneck_locs_iter = range(start, end + 1) # the iterator is a range(...)
+        start, end = args.bottleneck_locs  # argparse will output a 2 element list
+        bottleneck_locs_iter = range(start, end + 1)  # the iterator is a range(...)
 
     all_data = []
     # Use itertools.product this takes the cartesisan product of the two iterators.
@@ -286,6 +335,10 @@ def compvit_sweep(args):
         {colour_text("bottleneck_locs", 'cyan')}: {config['bottleneck_locs']}
         {colour_text("bottleneck_size", 'cyan')}: {config['bottleneck_size']}
         {colour_text("bottleneck", 'cyan')}: {config['bottleneck']}
+        {colour_text("num_codebook_tokens", 'cyan')}: {config['num_codebook_tokens']}
+        {colour_text("inv_bottleneck", 'cyan')}: {config['inv_bottleneck']}
+        {colour_text("inv_bottle_size", 'cyan')}: {config['inv_bottle_size']}
+        {colour_text("codebook_ratio", 'cyan')}: {config['codebook_ratio']}
         {colour_text("Mean (ms)", "magenta")}: {latency_mean:.2f}
         {colour_text("Median (ms)", "magenta")}: {latency_median:.2f}
         {colour_text("IQR (ms)", "magenta")}: {latency_iqr:.2f}
@@ -304,13 +357,27 @@ def compvit_sweep(args):
                 "bottleneck_locs": config["bottleneck_locs"][0],
                 "bottleneck_size": config["bottleneck_size"],
                 "bottleneck": config["bottleneck"],
+                "num_codebook_tokens": config["num_codebook_tokens"],
+                "inv_bottleneck": config["inv_bottleneck"],
+                "inv_bottle_size": config["inv_bottle_size"],
+                "codebook_ratio": config["codebook_ratio"],
                 "Mean (ms)": latency_mean,
                 "Median (ms)": latency_median,
                 "IQR (ms)": latency_iqr,
             }
         )
-    
-    filename = "_".join([device_info(args).replace(" ", ""), model_name.replace("_", ""), f"bs{args.batch_size}"]) + ".csv"
+
+    filename = (
+        "_".join(
+            [
+                device_info(args).replace(" ", ""),
+                model_name.replace("_", ""),
+                f"bs{args.batch_size}",
+                f"{args.filetag}",
+            ]
+        )
+        + ".csv"
+    )
     export_sweep_data(all_data, filename)
 
 
@@ -345,7 +412,6 @@ def main():
     args = parse_args()
     device_name = device_info(args)
     print(f"{colour_text('Device', 'red')}: {device_name}")
-
 
     testing_multiple = args.all_dino or args.all_compvit
     if testing_multiple:

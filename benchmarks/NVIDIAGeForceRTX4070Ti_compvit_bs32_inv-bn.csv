@@ -1,0 +1,5 @@
+  ,Parameters ,Depth ,Embedding Dim ,num_compressed_tokens ,bottleneck_locs ,bottleneck_size ,bottleneck      ,num_codebook_tokens ,inv_bottleneck           ,inv_bottle_size ,Mean (ms)          ,Median (ms)         ,IQR (ms)
+0 ,  31692672 ,   12 ,          384 ,                   16 ,              5 ,              1 ,conv_bottleneck ,                128 ,inverted_conv_bottleneck ,              1 , 22.81404897156689 , 22.697975000482984 ,0.204242000108934
+1 , 125021952 ,   12 ,          768 ,                   16 ,              5 ,              1 ,conv_bottleneck ,                128 ,inverted_conv_bottleneck ,              1 , 71.01524487621742 , 71.03228300184128  ,0.42240399852744304
+2 , 372663296 ,   24 ,         1024 ,                   16 ,             11 ,              1 ,conv_bottleneck ,                128 ,inverted_conv_bottleneck ,              1 ,193.68061023773666 ,193.661779499962    ,0.6551597507495899
+3 ,1290040832 ,   40 ,         1536 ,                   16 ,             20 ,              1 ,conv_bottleneck ,                128 ,inverted_conv_bottleneck ,              1 ,663.6949622317422  ,662.4797930016939   ,6.171925000671763

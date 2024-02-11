@@ -28,6 +28,8 @@ class Compressor(nn.Module):
         num_compressed_tokens: int = 16,
         num_tokens: int = 196,
         bottleneck: nn.Module = None,
+        num_codebook_tokens: int = 256,
+        inv_bottleneck: nn.Module = nn.Identity,
         *args,
         **kwargs
     ) -> None:
@@ -35,6 +37,9 @@ class Compressor(nn.Module):
         self.num_tokens = num_tokens
         self.num_compressed_tokens = num_compressed_tokens
         self.bottleneck = bottleneck(self.num_tokens, self.num_compressed_tokens)
+
+        self.num_codebook_tokens = num_codebook_tokens
+        self.inv_bottleneck = inv_bottleneck(self.num_tokens, self.num_codebook_tokens)
 
         self.block_1 = CompBlock(
             dim=dim,
@@ -79,17 +84,22 @@ class Compressor(nn.Module):
         # Compressing tokens
         compressed_tokens = self.bottleneck(x)
 
+        # Create codebook tokens
+        x = self.inv_bottleneck(x)
+
         # Transfer to compressed tokens
         x = torch.concat([x, compressed_tokens], dim=1)
         compressed_tokens = self.block_1(x, compressed_tokens, get_attn)
 
         # Refine compressed tokens
         # x = torch.concat([x, compressed_tokens], dim=1)
-        compressed_tokens = self.block_2(x, compressed_tokens + self.global_center, get_attn)
+        compressed_tokens = self.block_2(
+            x, compressed_tokens + self.global_center, get_attn
+        )
 
         return compressed_tokens
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     compressor = Compressor(384, 8, 4)
-    print(compressor(torch.randn((1,196,384))).shape)
+    print(compressor(torch.randn((1, 196, 384))).shape)
