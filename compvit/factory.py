@@ -80,4 +80,7 @@ def mae_factory(
 
 
 if __name__ == "__main__":
-    compvit_factory("compvits14")
+    x = torch.randn(1, 3, 224, 224).to("cuda")
+    model, conf = compvit_factory("compvits14")
+    model = model.to("cuda")
+    print(model(x).shape)

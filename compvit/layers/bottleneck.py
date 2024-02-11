@@ -145,9 +145,8 @@ def conv_bottleneck(num_tokens, num_compressed_tokens, dim, ratio, bottleneck_si
 
 if __name__ == "__main__":
     net = conv_bottleneck(256, 16, 786, 1, 1)
-    print(net(torch.randn(32, 256, 786)).shape)
 
-    x = torch.randn(32, 256, 786).to("cuda")
+    x = torch.randn(32, 257, 786).to("cuda")
     t0 = benchmark.Timer(
         stmt="net(x)",
         setup="from __main__ import conv_bottleneck; net = conv_bottleneck(256, 16, 786, 4, 1).to('cuda')",
@@ -157,7 +156,7 @@ if __name__ == "__main__":
 
     t1 = benchmark.Timer(
         stmt="net(x)",
-        setup="from __main__ import mixer_bottleneck_multi_v2; net = mixer_bottleneck_multi_v2(256, 16, 786, 4, 1).to('cuda')",
+        setup="from __main__ import mixer_bottleneck_multi_v2; net = mixer_bottleneck_multi_v2(257, 16, 786, 4, 1).to('cuda')",
         globals={"x": x},
         num_threads=1,
     )

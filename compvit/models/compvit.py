@@ -15,11 +15,10 @@ from ..layers.bottleneck import (
     mixer_bottleneck_relu,
     mixer_bottleneck_multi,
     mixer_bottleneck_multi_v2,
-    conv_bottleneck
+    conv_bottleneck,
 )
+from ..layers.inverted_bottleneck import inverted_conv_bottleneck
 from ..layers.compressor import Compressor
-from torch.profiler import profile, record_function, ProfilerActivity
-
 
 
 class CompViT(DinoVisionTransformer):
@@ -53,9 +52,16 @@ class CompViT(DinoVisionTransformer):
             "mixer_bottleneck_relu",
             "mixer_bottleneck_multi",
             "mixer_bottleneck_multi_v2",
-        ] = "mixer_bottleneck_v2",
+            "conv_bottleneck",
+        ] = "conv_bottleneck",
         bottleneck_locs=[5, 6],
         bottleneck_size=1,
+        num_codebook_tokens: int = 256,
+        inv_bottleneck: Literal[
+            "identity",
+            "inverted_conv_bottleneck",
+        ] = "identity",
+        inv_bottle_size: int = 1,
     ):
         super().__init__(
             img_size,
@@ -98,7 +104,8 @@ class CompViT(DinoVisionTransformer):
 
         self.total_tokens = num_patches + self.num_tokens + self.num_register_tokens
         # self.total_tokens = num_patches
-        self.num_compressed_tokens = num_compressed_tokens + 1 # Add CLS Token
+        self.num_compressed_tokens = num_compressed_tokens + 1  # Add CLS Token
+        self.num_codebook_tokens = num_codebook_tokens
 
         # Add compressor.
         if num_compressed_tokens:
@@ -132,6 +139,16 @@ class CompViT(DinoVisionTransformer):
                     bottleneck_size=bottleneck_size,
                 )
 
+            if inv_bottleneck == "identity":
+                inv_bottleneck = nn.Identity
+            elif inv_bottleneck == "inverted_conv_bottleneck":
+                inv_bottleneck = partial(
+                    inverted_conv_bottleneck,
+                    dim=embed_dim,
+                    ratio=mlp_ratio,
+                    inverted_bottleneck_size=inv_bottle_size,
+                )
+
             self.compressor = Compressor(
                 dim=embed_dim,
                 num_heads=num_heads,
@@ -146,6 +163,8 @@ class CompViT(DinoVisionTransformer):
                 num_compressed_tokens=self.num_compressed_tokens,
                 num_tokens=self.total_tokens,
                 bottleneck=bottleneck,
+                num_codebook_tokens=self.num_codebook_tokens,
+                inv_bottleneck=inv_bottleneck,
             )
 
     def forward_features(self, x, masks=None, get_attn=False):
