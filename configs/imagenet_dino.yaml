@@ -4,22 +4,22 @@ dinov2:
 
 compvit:
   name: compvits14
-  checkpoint: "checkpoints/2024-01-31-085238/best_performing.pt"
+  checkpoint: "checkpoints/mae_2024-02-06-230335/best_performing.pth"
 
 head:
   num_classes: 1000
-  checkpoint: "checkpoints/2024-01-31-085238/best_performing_head.pt"
+  checkpoint: ""
 
 
 hyperparameters:
-  lr: 8.0E-05
+  lr: 5.0E-05
   min_lr: 1.0e-8
   warmup_lr_scale: 1.0e-4
   warmup_epochs: 10
   batch_size: 256
   test_batch_size: 32
-  num_workers: 24
-  epochs: 150
+  num_workers: 16
+  epochs: 60
   mixup_alpha: 0.8 
   accumulations: 1
 
