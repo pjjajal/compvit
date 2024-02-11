@@ -1,0 +1,5 @@
+,Parameters,Depth,Embedding Dim,num_compressed_tokens,bottleneck_locs,bottleneck_size,bottleneck,num_codebook_tokens,inv_bottleneck,inv_bottle_size,codebook_ratio,Mean (ms),Median (ms),IQR (ms)
+0,23661962,12,384,16,5,1,conv_bottleneck,128,inverted_mlp,1,2,13.993216424821115,13.990420997288311,0.0893162487045629
+1,91753226,12,768,16,5,1,conv_bottleneck,128,inverted_mlp,1,2,41.8445204636555,41.84048850220279,0.2167189995816443
+2,313230346,24,1024,16,11,1,conv_bottleneck,128,inverted_mlp,1,2,143.54914242825802,143.35605199812562,0.6955170010769507
+3,1155866122,40,1536,16,20,1,conv_bottleneck,128,inverted_mlp,1,2,549.9975244005327,548.9170900036697,2.3843905000831

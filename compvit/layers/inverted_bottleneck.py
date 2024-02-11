@@ -3,6 +3,29 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.benchmark as benchmark
 from functools import partial
+from dinov2.layers import Mlp
+
+
+def inverted_mlp(num_tokens, code_book_tokens, dim, ratio):
+    class Net(nn.Module):
+        def __init__(self, *args, **kwargs) -> None:
+            super().__init__(*args, **kwargs)
+            if code_book_tokens > num_tokens * ratio:
+                raise ValueError(
+                    "Code book tokens must be less than or equal to num_tokens * ratio"
+                )
+            self.mlp = Mlp(
+                in_features=num_tokens,
+                hidden_features=num_tokens * ratio,
+                out_features=num_tokens * ratio,  # add 1 for CLS token
+            )
+            self.max_pool = nn.AdaptiveMaxPool1d(code_book_tokens)
+
+        def forward(self, x):
+            x = self.mlp(x.mT)
+            x = self.max_pool(x).mT
+            return x
+    return Net()
 
 
 def inverted_conv_bottleneck(
@@ -50,7 +73,7 @@ def inverted_conv_bottleneck(
                     kernel_size=7,
                     padding=3,
                     stride=2,
-                    groups=dim
+                    groups=dim,
                 ),
             )
 

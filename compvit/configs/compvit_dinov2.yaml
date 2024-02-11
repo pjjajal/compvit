@@ -17,9 +17,10 @@ compvits14:
   bottleneck: "conv_bottleneck"
   bottleneck_locs: [5, 6]
   bottleneck_size: 1
-  num_codebook_tokens: 128
-  inv_bottleneck: "inverted_conv_bottleneck"
+  num_codebook_tokens: 384
+  inv_bottleneck: "inverted_mlp"
   inv_bottle_size: 1
+  codebook_ratio: 2
 
 compvitb14:
   img_size: 518
@@ -35,14 +36,16 @@ compvitb14:
   interpolate_antialias: False 
   interpolate_offset: 0.1
   # Compressor Specific
-  num_patches: 128
+  num_patches: 256
   num_compressed_tokens: 16
   bottleneck: "conv_bottleneck"
   bottleneck_locs: [5, 6]
   bottleneck_size: 1
-  num_codebook_tokens: 128
-  inv_bottleneck: "inverted_conv_bottleneck"
+  num_codebook_tokens: 384
+  inv_bottleneck: "inverted_mlp"
   inv_bottle_size: 1
+  codebook_ratio: 2
+
 
 compvitl14:
   img_size: 518
@@ -63,9 +66,11 @@ compvitl14:
   bottleneck: "conv_bottleneck"
   bottleneck_locs: [11, 12]
   bottleneck_size: 1
-  num_codebook_tokens: 128
-  inv_bottleneck: "inverted_conv_bottleneck"
+  num_codebook_tokens: 384
+  inv_bottleneck: "inverted_mlp"
   inv_bottle_size: 1
+  codebook_ratio: 2
+
 
 compvitg14:
   img_size: 518
@@ -86,6 +91,8 @@ compvitg14:
   bottleneck: "conv_bottleneck"
   bottleneck_locs: [20, 21]
   bottleneck_size: 1
-  num_codebook_tokens: 128
-  inv_bottleneck: "inverted_conv_bottleneck"
+  num_codebook_tokens: 384
+  inv_bottleneck: "inverted_mlp"
   inv_bottle_size: 1
+  codebook_ratio: 2
+

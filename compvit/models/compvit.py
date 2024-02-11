@@ -17,7 +17,7 @@ from ..layers.bottleneck import (
     mixer_bottleneck_multi_v2,
     conv_bottleneck,
 )
-from ..layers.inverted_bottleneck import inverted_conv_bottleneck
+from ..layers.inverted_bottleneck import inverted_conv_bottleneck, inverted_mlp
 from ..layers.compressor import Compressor
 
 
@@ -60,8 +60,10 @@ class CompViT(DinoVisionTransformer):
         inv_bottleneck: Literal[
             "identity",
             "inverted_conv_bottleneck",
+            "inverted_mlp",
         ] = "identity",
         inv_bottle_size: int = 1,
+        codebook_ratio: int = 2,
     ):
         super().__init__(
             img_size,
@@ -148,6 +150,8 @@ class CompViT(DinoVisionTransformer):
                     ratio=mlp_ratio,
                     inverted_bottleneck_size=inv_bottle_size,
                 )
+            elif inv_bottleneck == "inverted_mlp":
+                inv_bottleneck = partial(inverted_mlp, dim=embed_dim, ratio=codebook_ratio)
 
             self.compressor = Compressor(
                 dim=embed_dim,
