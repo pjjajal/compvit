@@ -15,6 +15,7 @@ class Mask(nn.Module):
             torch.zeros((1, num_patches, decoder_embed_dim)),
             requires_grad=True,
         )
+
     def initialize_weights(self):
         # decoder position embedding initialization
         torch.nn.init.normal_(self.decoder_pos_embed, std=0.02)
@@ -27,6 +28,7 @@ class Mask(nn.Module):
         mask_tokens = self.mask_token.repeat(B, num_patches, 1)
         mask_tokens = mask_tokens + self.decoder_pos_embed
         return mask_tokens
+
 
 class MAECompVit(nn.Module):
     def __init__(
@@ -61,18 +63,17 @@ class MAECompVit(nn.Module):
         #     torch.zeros((1, self.num_patches, decoder_embed_dim)),
         #     requires_grad=True,
         # )
-        self.mask_gen = Mask(decoder_embed_dim, self.num_patches)
+        # self.mask_gen = Mask(decoder_embed_dim, self.num_patches)
 
         # Decoder Norm
-        self.decoder_norm = norm_layer(decoder_embed_dim)
+        # self.decoder_norm = norm_layer(decoder_embed_dim)
 
         # Linear projection from encoder embeddings to decoder embeddings
-        self.decoder_embed = nn.Linear(embed_dim, decoder_embed_dim, bias=True)
+        self.decoder_embed = nn.Linear(embed_dim * 2, decoder_embed_dim * 2, bias=True)
         # Linear projection from decoder embeddings to baseline embeddings
         self.decoder_pred = nn.Linear(
-            decoder_embed_dim, baseline_embed_dim, bias=True
+            decoder_embed_dim * 2, baseline_embed_dim * 2, bias=True
         )  # decoder to patch
-
 
         self.initialize_weights()
 
@@ -84,15 +85,15 @@ class MAECompVit(nn.Module):
         # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
         # torch.nn.init.normal_(self.mask_token, std=0.02)
 
-        self.mask_gen.initialize_weights()
+        # self.mask_gen.initialize_weights()
 
         # decoder_embed and decoder_pred initialization
         self._init_weights(self.decoder_embed)
         self._init_weights(self.decoder_pred)
 
         # decoder norm init
-        nn.init.constant_(self.decoder_norm.bias, 0)
-        nn.init.constant_(self.decoder_norm.weight, 1.0)
+        # nn.init.constant_(self.decoder_norm.bias, 0)
+        # nn.init.constant_(self.decoder_norm.weight, 1.0)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -115,11 +116,12 @@ class MAECompVit(nn.Module):
                     train_bottleneck=train_bottleneck, blocks=blocks
                 )
             )
-        parameters.extend(self.decoder.parameters())
+
         parameters.extend(self.decoder_embed.parameters())
         parameters.extend(self.decoder_pred.parameters())
-        parameters.extend(self.decoder_norm.parameters())
-        parameters.extend(self.mask_gen.parameters())
+        # parameters.extend(self.decoder.parameters())
+        # parameters.extend(self.decoder_norm.parameters())
+        # parameters.extend(self.mask_gen.parameters())
         # parameters.extend(self.mask_token)
         # parameters.extend(self.decoder_pos_embed)
 
@@ -128,26 +130,17 @@ class MAECompVit(nn.Module):
     @torch.no_grad()
     def forward_baseline(self, x):
         baseline_outputs = self.baseline.forward_features(x)
-        # baseline_outputs = torch.cat(
-        #     [
-        #         baseline_outputs["x_norm_clstoken"].unsqueeze(1),
-        #         baseline_outputs["x_norm_patchtokens"],
-        #     ],
-        #     dim=1,
-        # )
-        return baseline_outputs["x_norm"]
-        return baseline_outputs["x_norm_patchtokens"]
+        cls_token = baseline_outputs["x_norm_clstoken"]
+        patch_tokens = baseline_outputs["x_norm_patchtokens"]
+        baseline_outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
+        return baseline_outputs
 
     def forward_encoder(self, x):
         encoder_outputs = self.encoder.forward_features(x)
-        # encoder_outputs = torch.cat(
-        #     [
-        #         encoder_outputs["x_norm_clstoken"].unsqueeze(1),
-        #         encoder_outputs["x_norm_patchtokens"],
-        #     ],
-        #     dim=1,
-        # )
-        return encoder_outputs["x_norm"]
+        cls_token = encoder_outputs["x_norm_clstoken"]
+        patch_tokens = encoder_outputs["x_norm_patchtokens"]
+        encoder_outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
+        return encoder_outputs
 
     def forward_decoder(self, encoder_outputs):
         B, _, _ = encoder_outputs.shape
@@ -165,7 +158,8 @@ class MAECompVit(nn.Module):
         return decoder_outputs
 
     def forward_loss(self, baseline_outputs, decoder_outputs):
-        B, N, C = baseline_outputs.shape
+        # B, N, C = baseline_outputs.shape
+        B,C = baseline_outputs.shape
 
         # Project decoder embed dim to baseline embed dim
         decoder_outputs = self.decoder_pred(decoder_outputs)
@@ -184,11 +178,7 @@ class MAECompVit(nn.Module):
         encoder_outputs = self.forward_encoder(x)
         # decoder_outputs = self.forward_decoder(encoder_outputs)
 
-        # L2 of CLS
-        baseline_outputs = baseline_outputs[:, 0, :].unsqueeze(1)
-        # decoder_outputs = self.decoder_embed(decoder_outputs.mean(dim=1).unsqueeze(1))
-        decoder_outputs = self.decoder_embed(encoder_outputs.mean(dim=1).unsqueeze(1))
-        
-        # encoder_outputs.to(device="cpu")
+        decoder_outputs = self.decoder_embed(encoder_outputs)
+
         loss = self.forward_loss(baseline_outputs, decoder_outputs)
         return loss

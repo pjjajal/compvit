@@ -17,9 +17,9 @@ def inverted_mlp(num_tokens, code_book_tokens, dim, ratio):
             self.mlp = Mlp(
                 in_features=num_tokens,
                 hidden_features=num_tokens * ratio,
-                out_features=num_tokens * ratio,  # add 1 for CLS token
+                out_features=code_book_tokens,
             )
-            self.max_pool = nn.AdaptiveMaxPool1d(code_book_tokens)
+            # self.max_pool = nn.AdaptiveAvgPool1d(code_book_tokens)
 
         def forward(self, x):
             x = self.mlp(x.mT)

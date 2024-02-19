@@ -83,4 +83,4 @@ if __name__ == "__main__":
     x = torch.randn(1, 3, 224, 224).to("cuda")
     model, conf = compvit_factory("compvits14")
     model = model.to("cuda")
-    print(model(x).shape)
+    print(model(x, is_training=True)['x_norm'].shape)

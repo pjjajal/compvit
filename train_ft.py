@@ -68,7 +68,12 @@ def evaluate(test_loader, model, head):
             start_event.record()
             outputs = model(images, is_training=True)
             if args.model == "dinov2":
-                outputs = outputs["x_norm_clstoken"]
+                patch_tokens = outputs["x_norm_patchtokens"]
+                cls_token = outputs["x_norm_clstoken"]
+                outputs = torch.cat([
+                    cls_token,
+                    patch_tokens.mean(dim=1),
+                ], dim=1)
             elif args.model == "compvit":
                 outputs = outputs["x_norm"].mean(-2)
             outputs = head(outputs)
@@ -157,7 +162,7 @@ def main(args):
     # Update W&B run metadata.
     run.config.update({**config})
 
-    head = nn.Linear(model.embed_dim, head_config["num_classes"])
+    head = nn.Linear(model.embed_dim * 2, head_config["num_classes"])
     if head_config["checkpoint"]:
         print("Loading", head_config["checkpoint"])
         head.load_state_dict(torch.load(head_config["checkpoint"]))
@@ -218,7 +223,12 @@ def main(args):
                 # Forward pass.
                 outputs = model(img, is_training=True)
                 if args.model == "dinov2":
-                    outputs = outputs["x_norm_clstoken"]
+                    patch_tokens = outputs["x_norm_patchtokens"]
+                    cls_token = outputs["x_norm_clstoken"]
+                    outputs = torch.cat([
+                        cls_token,
+                        patch_tokens.mean(dim=1),
+                    ], dim=1)
                 elif args.model == "compvit":
                     outputs = outputs["x_norm"].mean(-2)
                 outputs = head(outputs)
