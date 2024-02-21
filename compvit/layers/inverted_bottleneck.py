@@ -23,8 +23,8 @@ def inverted_mlp(num_tokens, code_book_tokens, dim, ratio):
 
         def forward(self, x):
             x = self.mlp(x.mT)
-            x = self.max_pool(x).mT
-            return x
+            # x = self.max_pool(x).mT
+            return x.mT
     return Net()
 
 
