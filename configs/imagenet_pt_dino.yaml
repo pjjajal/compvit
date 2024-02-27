@@ -1,10 +1,10 @@
 teacher:
-  name: dinov2_vits14
-  checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
+  name: dinov2_vitb14
+  checkpoint: "dinov2/checkpoints/dinov2_vitb14_pretrain.pth"
 
 student:
-  name: compvits14
-  checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
+  name: compvitb14
+  checkpoint: "dinov2/checkpoints/dinov2_vitb14_pretrain.pth"
   # checkpoint: "checkpoints/mae_2024-01-20-181842/best_performing.pth"
   decoder_checkpoint: ""
 
@@ -13,13 +13,14 @@ hyperparameters:
   min_lr: 1.0e-8
   warmup_lr_scale: 1.0e-4
   warmup_epochs: 10
-  batch_size: 1024
-  num_workers: 32
-  epochs: 200
+  batch_size: 128
+  num_workers: 8
+  epochs: 100
   mixup_alpha: 0.8 
-  accumulations: 4
+  accumulations: 8
+  in_memory: True
 
 args:
   device: cuda:0
-  data_dir: "/scratch/gilbreth/pjajal/datasets/imagenet-1k"
+  data_dir: "/home/jajal/datasets/train_500_0.5_90.ffcv"
   precision: "bf16-mixed"
