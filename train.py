@@ -155,6 +155,7 @@ def main(args):
         max_epochs=hyperparameters["epochs"],
         logger=wandb_logger,
         benchmark=True,  # cudnn benchmarking, allows for faster training.
+        enable_checkpointing=False # Disable automatic checkpointing (we do this manually).
     )
 
     # Create dataset and train loader.
