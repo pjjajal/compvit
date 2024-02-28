@@ -75,7 +75,9 @@ def evaluate(test_loader, model, head):
                     patch_tokens.mean(dim=1),
                 ], dim=1)
             elif args.model == "compvit":
-                outputs = outputs["x_norm"].mean(-2)
+                cls_token = outputs["x_norm_clstoken"]
+                patch_tokens = outputs["x_norm_patchtokens"]
+                outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
             outputs = head(outputs)
             end_event.record()
             torch.cuda.synchronize()
@@ -230,7 +232,9 @@ def main(args):
                         patch_tokens.mean(dim=1),
                     ], dim=1)
                 elif args.model == "compvit":
-                    outputs = outputs["x_norm"].mean(-2)
+                    cls_token = outputs["x_norm_clstoken"]
+                    patch_tokens = outputs["x_norm_patchtokens"]
+                    outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
                 outputs = head(outputs)
                 loss = criterion(outputs, label)
                 # Running loss.

@@ -179,6 +179,9 @@ class MAECompVit(nn.Module):
         # decoder_outputs = self.forward_decoder(encoder_outputs)
 
         decoder_outputs = self.decoder_embed(encoder_outputs)
-
         loss = self.forward_loss(baseline_outputs, decoder_outputs)
+        
+        # Stupid hack to make multi-gpu work without issue for Lightning
+        all_params = torch.sum(torch.stack([torch.sum(p) for p in self.parameters()]))
+        loss = loss + 0 * all_params
         return loss

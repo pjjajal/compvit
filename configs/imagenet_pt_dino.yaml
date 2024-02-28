@@ -1,11 +1,13 @@
 teacher:
-  name: dinov2_vits14
-  checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
+  name: dinov2_vitl14
+  # checkpoint: "dinov2/checkpoints/dinov2_vitg14_pretrain.pth"
+  checkpoint: "/scratch/gilbreth/pjajal/dinov2_vitl14_pretrain.pth"
 
 student:
-  name: compvits14
-  checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
-  # checkpoint: "checkpoints/mae_2024-01-20-181842/best_performing.pth"
+  name: compvitl14
+  # checkpoint: "dinov2/checkpoints/dinov2_vitg14_pretrain.pth"
+  checkpoint: "/scratch/gilbreth/pjajal/dinov2_vitl14_pretrain.pth"
+  # checkpoint: "checkpoints/mae_2024-02-20-140130/best_performing.pth"
   decoder_checkpoint: ""
 
 hyperparameters:
@@ -13,11 +15,11 @@ hyperparameters:
   min_lr: 1.0e-8
   warmup_lr_scale: 1.0e-4
   warmup_epochs: 10
-  batch_size: 1024
+  batch_size: 512
   num_workers: 32
-  epochs: 200
+  epochs: 50
   mixup_alpha: 0.8 
-  accumulations: 4
+  accumulations: 32
 
 args:
   device: cuda:0

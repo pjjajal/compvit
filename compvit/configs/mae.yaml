@@ -1,6 +1,6 @@
 decoder:
   nhead: 4
-  decoder_dim: 384
+  decoder_dim: 1024
   mlp_ratio: 4
   dropout: 0.0
   activation: gelu

@@ -117,6 +117,9 @@ def main(args):
     run.config.update(config)
 
     # Create optimizer and scheduler.
+    for i, param in mae.encoder.named_parameters():
+        if "patch_embed" in i:
+            param.requires_grad = False
     optimizer = optim.AdamW(
         mae.training_parameters(whole=True), lr=hyperparameters["lr"], weight_decay=5e-2
     )
