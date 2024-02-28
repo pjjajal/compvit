@@ -20,10 +20,7 @@ class CosineAnnealingWithWarmup(optim.lr_scheduler.CosineAnnealingLR):
 
     def get_lr(self) -> List[float]:
         if self.last_epoch < self.warmup_epochs:
-            return [
-                self.eta_min * (self.last_epoch / self.warmup_epochs)
-                for base_lr in self.base_lrs
-            ]
+            return self._warmup_lr(self.last_epoch)
         else:
             return self._cosine_lr(self.last_epoch - self.warmup_epochs)
 
