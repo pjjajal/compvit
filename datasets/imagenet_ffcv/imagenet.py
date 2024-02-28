@@ -73,9 +73,10 @@ def create_train_pipeline(
         # Add the rest of the pipeline
         image_pipeline.extend(
             [
+                ToTensor(),
+                ToTorchImage(convert_back_int16=False),
                 ToDevice(device, non_blocking=True),
-                ToTorchImage(),
-                NormalizeImage(IMAGENET_MEAN, IMAGENET_STD, np.float16),
+                NormalizeImage(IMAGENET_MEAN, IMAGENET_STD, np.float32),
             ]
         )
     ########################################################
@@ -108,9 +109,10 @@ def create_val_pipeline(
     )
     image_pipeline: List[Operation] = [
         decoder,
+        ToTensor(),
+        ToTorchImage(convert_back_int16=False),
         ToDevice(device, non_blocking=True),
-        ToTorchImage(),
-        NormalizeImage(IMAGENET_MEAN, IMAGENET_STD, np.float16),
+        NormalizeImage(IMAGENET_MEAN, IMAGENET_STD, np.float32),
     ]
     # Label pipeline
     label_pipeline: List[Operation] = [

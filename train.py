@@ -1,28 +1,32 @@
 import argparse
+import math
 from datetime import datetime
 from pathlib import Path
+from typing import List
 
 import lightning as L
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as tvt
-import wandb
+from ffcv.loader import Loader, OrderOption
 from lightning.pytorch.loggers import WandbLogger
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 
-from compvit.models.mae import MAECompVit
+import wandb
 from compvit.factory import mae_factory
+from compvit.models.mae import MAECompVit
 from datasets import create_dataset
-from dinov2.factory import dinov2_factory
 from datasets.imagenet_ffcv import create_train_pipeline, create_val_pipeline
-from ffcv.loader import Loader, OrderOption
+from dinov2.factory import dinov2_factory
+from utils.schedulers import CosineAnnealingWithWarmup
 
 CONFIG_PATH = Path("./configs")
 CHECKPOINTS_PATH = Path("./checkpoints")
 
 torch.set_float32_matmul_precision("medium")
+
 
 def parse_args():
     parser = argparse.ArgumentParser("training and evaluation script")
@@ -75,7 +79,18 @@ class LightningMAE(L.LightningModule):
             lr=self.hyperparameters["lr"],
             weight_decay=5e-2,
         )
-        return optimizer
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": CosineAnnealingWithWarmup(
+                    optimizer,
+                    T_max=self.hyperparameters["epochs"],
+                    eta_min=self.hyperparameters["min_lr"],
+                    warmup_epochs=self.hyperparameters["warmup_epochs"],
+                ),
+                "interval": "epoch",
+            },
+        }
 
     def on_train_epoch_end(self) -> None:
         if self.running_loss < self.lowest_batch_loss:
@@ -139,6 +154,7 @@ def main(args):
         accumulate_grad_batches=hyperparameters["accumulations"],
         max_epochs=hyperparameters["epochs"],
         logger=wandb_logger,
+        benchmark=True,  # cudnn benchmarking, allows for faster training.
     )
 
     # Create dataset and train loader.
