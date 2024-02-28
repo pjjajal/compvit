@@ -29,8 +29,8 @@ class CosineAnnealingWithWarmup(optim.lr_scheduler.CosineAnnealingLR):
         if last_epoch == 0:
             return [self.eta_min for group in self.optimizer.param_groups]
         return [
-            self.eta_min * (last_epoch / self.warmup_epochs)
-            for group in self.optimizer.param_groups
+            self.eta_min + last_epoch * (base_lr - self.eta_min) / self.warmup_epochs
+            for base_lr, group in zip(self.base_lrs, self.optimizer.param_groups)
         ]
 
     # This is nearly-identical to PyTorch implementation, but last epoch is now an argument.
