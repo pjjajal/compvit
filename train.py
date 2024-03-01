@@ -11,6 +11,7 @@ import torch.optim as optim
 import torchvision.transforms as tvt
 from ffcv.loader import Loader, OrderOption
 from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.callbacks import LearningRateMonitor
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 
@@ -23,7 +24,7 @@ from dinov2.factory import dinov2_factory
 from utils.schedulers import CosineAnnealingWithWarmup
 
 CONFIG_PATH = Path("./configs")
-CHECKPOINTS_PATH = Path("./checkpoints")
+DEFAULT_CHECKPOINTS_PATH = Path("./checkpoints")
 
 torch.set_float32_matmul_precision("medium")
 
@@ -36,6 +37,7 @@ def parse_args():
     parser.add_argument("--downsize", required=True, type=int, default=224)
     parser.add_argument("--devices", type=int, default=1)
     parser.add_argument("--num_nodes", type=int, default=1)
+    parser.add_argument("--checkpoints_path", type=Path, default=None)
     parser.add_argument(
         "--precision",
         choices=[
@@ -125,15 +127,17 @@ def main(args):
     model, config = mae_factory(
         teacher_name=baseline_config["name"], student_name=compvit_config["name"]
     )
-    model.baseline.load_state_dict(torch.load(baseline_checkpoint))
-    model.encoder.load_state_dict(torch.load(student_checkpoint), strict=False)
+    if baseline_checkpoint:
+        model.baseline.load_state_dict(torch.load(baseline_checkpoint), strict=False)
+    if student_checkpoint:
+        model.encoder.load_state_dict(torch.load(student_checkpoint), strict=False)
     if decoder_checkpoint:
         model.decoder.load_state_dict(torch.load(decoder_checkpoint))
 
     model = LightningMAE(model, args, hyperparameters)
 
     # Setup W&B.
-    wandb_logger = WandbLogger(project="compvit-test")
+    wandb_logger = WandbLogger(project="compvit-rcac")
     wandb_logger.experiment.config.update(
         {
             "architecture": "mae",
@@ -146,6 +150,9 @@ def main(args):
         }
     )
 
+    # Create lr monitor
+    lr_monitor = LearningRateMonitor(logging_interval='step')
+
     # Create trainer.
     trainer = L.Trainer(
         devices=args.devices,
@@ -155,12 +162,13 @@ def main(args):
         max_epochs=hyperparameters["epochs"],
         logger=wandb_logger,
         benchmark=True,  # cudnn benchmarking, allows for faster training.
-        enable_checkpointing=False # Disable automatic checkpointing (we do this manually).
+        enable_checkpointing=False, # Disable automatic checkpointing (we do this manually).
+        callbacks=[lr_monitor]
     )
 
     # Create dataset and train loader.
     image_pipeline, label_pipeline = create_train_pipeline(
-        device=torch.device("cuda:0"), pretraining=True, input_size=224
+        device=torch.device(f"cuda:{trainer.local_rank}"), pretraining=True, input_size=224
     )
     order = OrderOption.QUASI_RANDOM
     loader = Loader(
@@ -181,7 +189,11 @@ if __name__ == "__main__":
 
     now = "mae_" + datetime.now().strftime("%Y-%m-%d-%H%M%S")
 
-    save_loc = CHECKPOINTS_PATH / now
+        
+    save_loc = DEFAULT_CHECKPOINTS_PATH / now
+    if args.checkpoints_path:
+        save_loc = args.checkpoints_path / now
+    
     if not save_loc.exists():
         save_loc.mkdir(parents=True, exist_ok=True)
 

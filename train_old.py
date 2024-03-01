@@ -160,7 +160,7 @@ def main(args):
 
         # Logging
         print(
-            f"batch loss: {batch_loss}, , lr: {optimizer.param_groups[0]['lr']}"
+            f"batch loss: {batch_loss}, lr: {optimizer.param_groups[0]['lr']}"
         )
         wandb.log({"train loss": batch_loss, "lr": optimizer.param_groups[0]["lr"]})
 

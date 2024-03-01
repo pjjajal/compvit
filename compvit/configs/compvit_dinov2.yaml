@@ -64,7 +64,7 @@ compvitl14:
   num_patches: 256
   num_compressed_tokens: 16
   bottleneck: "conv_bottleneck"
-  bottleneck_locs: [11, 12]
+  bottleneck_locs: [5, 6]
   bottleneck_size: 1
   num_codebook_tokens: 384
   inv_bottleneck: "inverted_mlp"
