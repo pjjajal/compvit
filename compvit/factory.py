@@ -52,17 +52,18 @@ def mae_factory(
 
     student, compvit_conf = compvit_factory(student_name)
 
-    decoder_layer = nn.TransformerDecoderLayer(
-        d_model=decoder_conf["decoder_dim"],
-        nhead=decoder_conf["nhead"],
-        dim_feedforward=int(student.embed_dim * decoder_conf["mlp_ratio"]),
-        dropout=0.0,
-        activation=F.gelu,
-        layer_norm_eps=1e-5,
-        batch_first=True,
-        norm_first=True,
-    )
-    decoder = nn.TransformerDecoder(decoder_layer, decoder_conf["num_layers"])
+    # decoder_layer = nn.TransformerDecoderLayer(
+    #     d_model=decoder_conf["decoder_dim"],
+    #     nhead=decoder_conf["nhead"],
+    #     dim_feedforward=int(student.embed_dim * decoder_conf["mlp_ratio"]),
+    #     dropout=0.0,
+    #     activation=F.gelu,
+    #     layer_norm_eps=1e-5,
+    #     batch_first=True,
+    #     norm_first=True,
+    # )
+    # decoder = nn.TransformerDecoder(decoder_layer, decoder_conf["num_layers"])
+    decoder = None
 
     return (
         MAECompVit(

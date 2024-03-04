@@ -62,14 +62,14 @@ compvitl14:
   interpolate_offset: 0.1
   # Compressor Specific
   num_patches: 256
-  num_compressed_tokens: 16
+  num_compressed_tokens: 8
   bottleneck: "conv_bottleneck"
   bottleneck_locs: [5, 6]
   bottleneck_size: 1
   num_codebook_tokens: 384
   inv_bottleneck: "inverted_mlp"
   inv_bottle_size: 1
-  codebook_ratio: 2
+  codebook_ratio: 4
 
 
 compvitg14:
@@ -89,10 +89,10 @@ compvitg14:
   num_patches: 256
   num_compressed_tokens: 16
   bottleneck: "conv_bottleneck"
-  bottleneck_locs: [20, 21]
-  bottleneck_size: 1
+  bottleneck_locs: [10, 11]
+  bottleneck_size: 3
   num_codebook_tokens: 384
   inv_bottleneck: "inverted_mlp"
   inv_bottle_size: 1
-  codebook_ratio: 2
+  codebook_ratio: 4
 
