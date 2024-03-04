@@ -1,26 +1,32 @@
 import argparse
+import math
 from datetime import datetime
 from pathlib import Path
+from typing import List
 
+import lightning as L
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as tvt
-from lightning.fabric import Fabric
+from ffcv.loader import Loader, OrderOption
+from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.callbacks import LearningRateMonitor
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 import wandb
 from compvit.factory import mae_factory
+from compvit.models.mae import MAECompVit
 from datasets import create_dataset
+from datasets.imagenet_ffcv import create_train_pipeline, create_val_pipeline
 from dinov2.factory import dinov2_factory
-
-
-torch.set_float32_matmul_precision("medium")
+from utils.schedulers import CosineAnnealingWithWarmup
 
 CONFIG_PATH = Path("./configs")
-CHECKPOINTS_PATH = Path("./checkpoints")
+DEFAULT_CHECKPOINTS_PATH = Path("./checkpoints")
+
+torch.set_float32_matmul_precision("medium")
 
 
 def parse_args():
@@ -31,6 +37,7 @@ def parse_args():
     parser.add_argument("--downsize", required=True, type=int, default=224)
     parser.add_argument("--devices", type=int, default=1)
     parser.add_argument("--num_nodes", type=int, default=1)
+    parser.add_argument("--checkpoints_path", type=Path, default=None)
     parser.add_argument(
         "--precision",
         choices=[
@@ -49,6 +56,55 @@ def parse_args():
     return parser.parse_args()
 
 
+class LightningMAE(L.LightningModule):
+    def __init__(self, model: MAECompVit, args, hyperparameters) -> None:
+        super().__init__()
+        self.model = model
+        self.hyperparameters = hyperparameters
+        self.args = args
+        self.downsize = tvt.Resize(args.downsize)
+
+        self.running_loss = 0
+        self.lowest_batch_loss = float("inf")
+
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        loss = self.model(x, self.downsize(x))
+        # Running loss.
+        self.running_loss += loss.detach().item()
+        self.log("train loss", loss, on_epoch=True, prog_bar=True, logger=True)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = optim.AdamW(
+            self.model.training_parameters(whole=True),
+            lr=self.hyperparameters["lr"],
+            weight_decay=5e-2,
+        )
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": CosineAnnealingWithWarmup(
+                    optimizer,
+                    T_max=self.hyperparameters["epochs"],
+                    eta_min=self.hyperparameters["min_lr"],
+                    warmup_epochs=self.hyperparameters["warmup_epochs"],
+                ),
+                "interval": "epoch",
+            },
+        }
+
+    def on_train_epoch_end(self) -> None:
+        if self.running_loss < self.lowest_batch_loss:
+            self.lowest_batch_loss = self.running_loss
+            self.running_loss = 0
+            # Save Model
+            save_path = self.args.save_loc / f"best_performing.pth"
+            save_path_pt = self.args.save_loc / f"best_performing_pt.pth"
+            torch.save(self.model.encoder.state_dict(), save_path)
+            torch.save(self.model.state_dict(), save_path_pt)
+
+
 def main(args):
     config_path = CONFIG_PATH / (args.dataset + "_pt_dino" + ".yaml")
     configs = OmegaConf.load(config_path)
@@ -62,125 +118,70 @@ def main(args):
         vars(args),
     )
 
-    # Initialize and launch fabric.
-    fabric = Fabric(
-        accelerator="auto",
-        devices=args.devices,
-        num_nodes=args.num_nodes,
-        precision=args.precision,
-    )
-    fabric.launch()
-
-    # Setup W&B.
-    run = wandb.init(
-        # set the wandb project where this run will be logged
-        project="compvit-rcac",
-        # track hyperparameters and run metadata
-        config={
-            "architecture": "mae",
-            # "dataset": args.dataset,
-            "teacher": baseline_config["name"],
-            "student": compvit_config["name"],
-            **hyperparameters,
-            **args,
-        },
-    )
-
-    # Create dataset and train loader.
-    train_dataset, _ = create_dataset(args)
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=hyperparameters["batch_size"],
-        shuffle=True,
-        num_workers=hyperparameters["num_workers"],
-        pin_memory=True
-    )
-
-    # Setup dataloader on Fabric.
-    train_loader = fabric.setup_dataloaders(train_loader)
-
     # Get checkpoint paths.
     baseline_checkpoint = baseline_config.pop("checkpoint")
     student_checkpoint = compvit_config.pop("checkpoint")
     decoder_checkpoint = compvit_config.pop("decoder_checkpoint")
 
     # Create MAE.
-    mae, config = mae_factory(
+    model, config = mae_factory(
         teacher_name=baseline_config["name"], student_name=compvit_config["name"]
     )
-    mae.baseline.load_state_dict(torch.load(baseline_checkpoint))
-    mae.encoder.load_state_dict(torch.load(student_checkpoint), strict=False)
+    if baseline_checkpoint:
+        model.baseline.load_state_dict(torch.load(baseline_checkpoint), strict=False)
+    if student_checkpoint:
+        model.encoder.load_state_dict(torch.load(student_checkpoint), strict=False)
     if decoder_checkpoint:
-        mae.decoder.load_state_dict(torch.load(decoder_checkpoint))
+        model.decoder.load_state_dict(torch.load(decoder_checkpoint))
 
-    # Update W&B run metadata.
-    run.config.update(config)
+    model = LightningMAE(model, args, hyperparameters)
 
-    # Create optimizer and scheduler.
-    for i, param in mae.encoder.named_parameters():
-        if "patch_embed" in i:
-            param.requires_grad = False
-    optimizer = optim.AdamW(
-        mae.training_parameters(whole=True), lr=hyperparameters["lr"], weight_decay=5e-2
-    )
-    warmup_scheduler = optim.lr_scheduler.LinearLR(
-        optimizer,
-        start_factor=hyperparameters["warmup_lr_scale"],
-        end_factor=1.0,
-        total_iters=hyperparameters["warmup_epochs"],
-        verbose=True,
-    )
-    cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        optimizer,
-        hyperparameters["epochs"] - hyperparameters["warmup_epochs"],
-        hyperparameters["min_lr"],
-        verbose=True,
+    # Setup W&B.
+    wandb_logger = WandbLogger(project="compvit-rcac")
+    wandb_logger.experiment.config.update(
+        {
+            "architecture": "mae",
+            # "dataset": args.dataset,
+            "teacher": baseline_config["name"],
+            "student": compvit_config["name"],
+            **config,
+            **hyperparameters,
+            **args,
+        }
     )
 
-    # Setup model and optimizer.
-    mae, optimizer = fabric.setup(mae, optimizer)
+    # Create lr monitor
+    lr_monitor = LearningRateMonitor(logging_interval='step')
 
-    # Setup view transform.
-    downsize = tvt.Resize(args.downsize)
+    # Create trainer.
+    trainer = L.Trainer(
+        devices=args.devices,
+        num_nodes=args.num_nodes,
+        precision=args.precision,
+        accumulate_grad_batches=hyperparameters["accumulations"],
+        max_epochs=hyperparameters["epochs"],
+        logger=wandb_logger,
+        benchmark=True,  # cudnn benchmarking, allows for faster training.
+        enable_checkpointing=False, # Disable automatic checkpointing (we do this manually).
+        callbacks=[lr_monitor]
+    )
 
-    lowest_batch_loss = 1e6
-    for epoch in range(hyperparameters["epochs"]):
-        running_loss = 0.0
-        for i, (img, label) in enumerate(tqdm(train_loader)):
-            is_accumulating = (i + 1) % hyperparameters["accumulations"] != 0
-            with fabric.no_backward_sync(mae, enabled=is_accumulating):
-                # Forward pass.
-                loss = mae(img, downsize(img))
-                # Running loss.
-                running_loss += loss.detach().item()
-                # Backward pass.
-                fabric.backward(loss)
-            if not is_accumulating or (i + 1) == len(train_loader):
-                optimizer.step()
-                optimizer.zero_grad()
-
-        batch_loss = running_loss / len(train_loader)
-
-        # Logging
-        print(
-            f"batch loss: {batch_loss}, , lr: {optimizer.param_groups[0]['lr']}"
-        )
-        wandb.log({"train loss": batch_loss, "lr": optimizer.param_groups[0]["lr"]})
-
-        # Scheduler Step
-        if epoch >= hyperparameters["warmup_epochs"]:
-            cosine_scheduler.step()
-        else:
-            warmup_scheduler.step()
-
-        # Save Model
-        if lowest_batch_loss > batch_loss:
-            lowest_batch_loss = batch_loss
-            save_path = args.save_loc / f"best_performing.pth"
-            save_path_pt = args.save_loc / f"best_performing_pt.pth"
-            torch.save(mae.encoder.state_dict(), save_path)
-            torch.save(mae.state_dict(), save_path_pt)
-    wandb.finish()
+    # Create dataset and train loader.
+    image_pipeline, label_pipeline = create_train_pipeline(
+        device=torch.device(f"cuda:{trainer.local_rank}"), pretraining=True, input_size=224
+    )
+    order = OrderOption.QUASI_RANDOM
+    loader = Loader(
+        fname=args.data_dir,
+        batch_size=hyperparameters["batch_size"],
+        num_workers=hyperparameters["num_workers"],
+        order=order,
+        os_cache=hyperparameters["in_memory"],
+        drop_last=True,
+        pipelines={"image": image_pipeline, "label": label_pipeline},
+    )
+    # Trainer Fit.
+    trainer.fit(model, loader)
 
 
 if __name__ == "__main__":
@@ -188,7 +189,11 @@ if __name__ == "__main__":
 
     now = "mae_" + datetime.now().strftime("%Y-%m-%d-%H%M%S")
 
-    save_loc = CHECKPOINTS_PATH / now
+        
+    save_loc = DEFAULT_CHECKPOINTS_PATH / now
+    if args.checkpoints_path:
+        save_loc = args.checkpoints_path / now
+    
     if not save_loc.exists():
         save_loc.mkdir(parents=True, exist_ok=True)
 
