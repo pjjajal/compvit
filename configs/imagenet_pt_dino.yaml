@@ -13,6 +13,7 @@ hyperparameters:
   min_lr: 1.0e-8
   warmup_lr_scale: 1.0e-4
   warmup_epochs: 15
+  batch_size: 512
   num_workers: 32
   epochs: 50
   mixup_alpha: 0.8 
