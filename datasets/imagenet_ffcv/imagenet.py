@@ -18,6 +18,7 @@ from ffcv.transforms import (
     ToDevice,
     ToTensor,
     ToTorchImage,
+    MixupToOneHot,
 )
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
@@ -60,15 +61,17 @@ def create_train_pipeline(
         image_pipeline: List[Operation] = [
             decoder,
             RandomHorizontalFlip(),
-            RandomGrayscale(p=1.0),
-            GaussianBlur(p=1.0),
-            RandomSolarization(p=1.0),
-            RandomColorJitter(p=0.3),  # Hardcoded value from DEIT3 3aug
+            RandomColorJitter(jitter_prob=0.3),  # Hardcoded value from DEIT3 3aug
+            RandomSolarization(solarization_prob=1/3),
+            RandomGrayscale(gray_prob=1/3),
+            GaussianBlur(blur_prob=1/3),
         ]
 
         # Mixup
         if "mixup_alpha" in kwargs:
-            image_pipeline.append(ImageMixup(alpha=kwargs["mixup_alpha"]))
+            image_pipeline.append(
+                ImageMixup(alpha=kwargs["mixup_alpha"], same_lambda=True)
+            )
 
         # Add the rest of the pipeline
         image_pipeline.extend(
@@ -85,11 +88,12 @@ def create_train_pipeline(
     label_pipeline = [IntDecoder()]
     # Label Mixup
     if "mixup_alpha" in kwargs:
-        label_pipeline.append(LabelMixup(alpha=kwargs["mixup_alpha"]))
+        label_pipeline.append(LabelMixup(alpha=kwargs["mixup_alpha"], same_lambda=True))
     # Rest of label pipeline
     label_pipeline.extend(
         [
             ToTensor(),
+            MixupToOneHot(num_classes=kwargs["num_classes"]),
             Squeeze(),
             ToDevice(device, non_blocking=True),
         ]
