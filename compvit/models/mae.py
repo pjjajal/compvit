@@ -1,6 +1,6 @@
 import logging
 from functools import partial
-from typing import Literal
+from typing import Literal, Union
 
 import torch
 import torch.nn as nn
@@ -19,22 +19,16 @@ class MaskTokens(nn.Module):
         self.mask_token = nn.Parameter(
             torch.zeros((1, 1, decoder_embed_dim)), requires_grad=True
         )
-        self.decoder_pos_embed = nn.Parameter(
-            torch.zeros((1, num_patches, decoder_embed_dim)),
-            requires_grad=True,
-        )
 
     def initialize_weights(self):
-        # decoder position embedding initialization
-        torch.nn.init.normal_(self.decoder_pos_embed, std=0.02)
-
         # mask token init
         # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
         torch.nn.init.normal_(self.mask_token, std=0.02)
 
-    def forward(self, B, num_patches):
+    def forward(self, num_patches, compressed_tokens):
+        B = compressed_tokens.shape[0]
         mask_tokens = self.mask_token.repeat(B, num_patches, 1)
-        mask_tokens = mask_tokens + self.decoder_pos_embed
+        mask_tokens = torch.cat([mask_tokens, compressed_tokens], dim=1)
         return mask_tokens
 
 
@@ -52,14 +46,13 @@ class Decoder(nn.Module):
         block_fn=Block,
         ffn_layer="mlp",
         init_values=None,  # for layerscale: None or 0 => no layerscale
-        num_tokens=1,
     ):
+        super().__init__()
         norm_layer = partial(nn.LayerNorm, eps=1e-6)
 
         self.num_features = self.embed_dim = (
             embed_dim  # num_features for consistency with other models
         )
-        self.num_tokens = num_tokens
         self.n_blocks = depth
         self.num_heads = num_heads
 
@@ -90,16 +83,16 @@ class Decoder(nn.Module):
                     ffn_layer=ffn_layer,
                     init_values=init_values,
                 )
-                for i in range(depth)
+                for _ in range(depth)
             ]
         )
         self.norm = norm_layer(embed_dim)
 
-    def forward(self, x):
+    def forward(self, x, num_tokens):
         for block in self.blocks:
             x = block(x)
         x_norm = self.norm(x)
-        return x_norm[:self.num_tokens]
+        return x_norm[:, :num_tokens, :]
 
 
 class MAECompVit(nn.Module):
@@ -107,11 +100,10 @@ class MAECompVit(nn.Module):
         self,
         baseline,
         encoder: CompViT,
-        decoder: nn.TransformerDecoder,
+        decoder: Union[Decoder, nn.Identity],
         baseline_embed_dim,
         embed_dim,
         decoder_embed_dim,
-        norm_layer,
         loss: Literal["l2"] = "l2",
         tradeoff: float = 5e-3,
         *args,
@@ -127,28 +119,18 @@ class MAECompVit(nn.Module):
         self.num_patches = self.encoder.total_tokens
         self.num_compressed_tokens = self.encoder.num_compressed_tokens
 
-        # Decoder Norm
-        # self.decoder_norm = norm_layer(decoder_embed_dim)
-
         # Linear projection from encoder embeddings to decoder embeddings
-        self.decoder_embed = nn.Linear(embed_dim * 2, decoder_embed_dim * 2, bias=True)
+        self.decoder_embed = nn.Linear(embed_dim, decoder_embed_dim, bias=True)
+
         # Linear projection from decoder embeddings to baseline embeddings
-        self.decoder_pred = nn.Linear(
-            decoder_embed_dim * 2, baseline_embed_dim * 2, bias=True
-        )  # decoder to patch
+        self.decoder_pred = nn.Linear(decoder_embed_dim, baseline_embed_dim, bias=True)
+
+        if isinstance(self.decoder, Decoder):
+            self.mask_tokens = MaskTokens(decoder_embed_dim, self.num_patches)
 
         self.initialize_weights()
 
     def initialize_weights(self):
-        # decoder position embedding initialization
-        # torch.nn.init.normal_(self.decoder_pos_embed, std=0.02)
-
-        # mask token init
-        # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
-        # torch.nn.init.normal_(self.mask_token, std=0.02)
-
-        # self.mask_gen.initialize_weights()
-
         # decoder_embed and decoder_pred initialization
         self._init_weights(self.decoder_embed)
         self._init_weights(self.decoder_pred)
@@ -177,48 +159,33 @@ class MAECompVit(nn.Module):
 
         parameters.extend(self.decoder_embed.parameters())
         parameters.extend(self.decoder_pred.parameters())
-        # parameters.extend(self.decoder.parameters())
-        # parameters.extend(self.decoder_norm.parameters())
-        # parameters.extend(self.mask_gen.parameters())
-        # parameters.extend(self.mask_token)
-        # parameters.extend(self.decoder_pos_embed)
 
         return parameters
 
     @torch.no_grad()
     def forward_baseline(self, x):
         baseline_outputs = self.baseline.forward_features(x)
-        cls_token = baseline_outputs["x_norm_clstoken"]
-        patch_tokens = baseline_outputs["x_norm_patchtokens"]
-        baseline_outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
-        return baseline_outputs
+        # cls_token = baseline_outputs["x_norm_clstoken"]
+        # patch_tokens = baseline_outputs["x_norm_patchtokens"]
+        # baseline_outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
+        return baseline_outputs['x_norm']
 
     def forward_encoder(self, x):
         encoder_outputs = self.encoder.forward_features(x)
-        cls_token = encoder_outputs["x_norm_clstoken"]
-        patch_tokens = encoder_outputs["x_norm_patchtokens"]
-        encoder_outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
-        return encoder_outputs
+        # cls_token = encoder_outputs["x_norm_clstoken"]
+        # patch_tokens = encoder_outputs["x_norm_patchtokens"]
+        # encoder_outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
+        return encoder_outputs['x_norm']
 
-    def forward_decoder(self, encoder_outputs):
-        B, _, _ = encoder_outputs.shape
-
-        # Create mask tokens
-        # mask_tokens = self.mask_token.repeat(B, self.num_patches, 1)
-        # mask_tokens = mask_tokens + self.decoder_pos_embed
-        mask_tokens = self.mask_gen(B, self.num_patches)
-
-        # Project encoder output embedding dim to decoder
+    def forward_decoder(self, encoder_outputs, N_baseline):
         encoder_outputs = self.decoder_embed(encoder_outputs)
-        # Decode forward pass
-        decoder_outputs = self.decoder(mask_tokens, encoder_outputs)
-        decoder_outputs = self.decoder_norm(decoder_outputs)
+        # Handle non-identify decoder
+        if isinstance(self.decoder, Decoder):
+            encoder_outputs = self.mask_tokens(N_baseline, encoder_outputs)
+        decoder_outputs = self.decoder(encoder_outputs, N_baseline)
         return decoder_outputs
 
     def forward_loss(self, baseline_outputs, decoder_outputs):
-        # B, N, C = baseline_outputs.shape
-        B, C = baseline_outputs.shape
-
         # Project decoder embed dim to baseline embed dim
         decoder_outputs = self.decoder_pred(decoder_outputs)
 
@@ -232,9 +199,10 @@ class MAECompVit(nn.Module):
     def forward(self, x, xbaseline):
         baseline_outputs = self.forward_baseline(xbaseline)
         encoder_outputs = self.forward_encoder(x)
-        # decoder_outputs = self.forward_decoder(encoder_outputs)
 
-        decoder_outputs = self.decoder_embed(encoder_outputs)
+        _, N_baseline, _ = baseline_outputs.shape
+        decoder_outputs = self.forward_decoder(encoder_outputs, N_baseline)
+
         loss = self.forward_loss(baseline_outputs, decoder_outputs)
 
         # Stupid hack to make multi-gpu work without issue for Lightning

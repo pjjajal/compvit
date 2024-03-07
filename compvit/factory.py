@@ -14,7 +14,7 @@ from dinov2.layers import MemEffAttention
 from dinov2.layers import NestedTensorBlock as Block
 
 from .models.compvit import CompViT
-from .models.mae import MAECompVit
+from .models.mae import MAECompVit, Decoder
 
 CONFIG_PATH = Path(os.path.dirname(os.path.abspath(__file__))) / "configs"
 
@@ -52,18 +52,22 @@ def mae_factory(
 
     student, compvit_conf = compvit_factory(student_name)
 
-    # decoder_layer = nn.TransformerDecoderLayer(
-    #     d_model=decoder_conf["decoder_dim"],
-    #     nhead=decoder_conf["nhead"],
-    #     dim_feedforward=int(student.embed_dim * decoder_conf["mlp_ratio"]),
-    #     dropout=0.0,
-    #     activation=F.gelu,
-    #     layer_norm_eps=1e-5,
-    #     batch_first=True,
-    #     norm_first=True,
-    # )
-    # decoder = nn.TransformerDecoder(decoder_layer, decoder_conf["num_layers"])
-    decoder = None
+    if decoder_conf['type'] == "transformer":
+        decoder = Decoder(
+            embed_dim=decoder_conf["decoder_dim"],
+            depth=decoder_conf["num_layers"],
+            num_heads=decoder_conf["nhead"],
+            mlp_ratio=decoder_conf["mlp_ratio"],
+            qkv_bias=True,
+            ffn_bias=True,
+            proj_bias=True,
+            act_layer=nn.GELU,
+            block_fn=Block,
+            ffn_layer="mlp",
+            init_values=compvit_conf["init_values"],
+        )
+    else:
+        decoder = nn.Identity()
 
     return (
         MAECompVit(
@@ -73,7 +77,6 @@ def mae_factory(
             baseline_embed_dim=teacher.embed_dim,
             embed_dim=student.embed_dim,
             decoder_embed_dim=decoder_conf["decoder_dim"],
-            norm_layer=LayerNorm,
             loss=conf["loss"],
         ),
         {**dino_conf, **compvit_conf, **decoder_conf},
@@ -85,3 +88,8 @@ if __name__ == "__main__":
     model, conf = compvit_factory("compvits14")
     model = model.to("cuda")
     print(model(x, is_training=True)['x_norm'].shape)
+
+    x = torch.randn(1, 3, 224, 224).to("cuda")
+    model, conf = mae_factory("dinov2_vits14", "compvits14")
+    model = model.to("cuda")
+    print(model(x, x))

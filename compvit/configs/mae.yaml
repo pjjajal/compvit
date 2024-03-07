@@ -1,4 +1,5 @@
 decoder:
+  type: transformer
   nhead: 16
   decoder_dim: 512
   mlp_ratio: 4
