@@ -1,11 +1,19 @@
+import logging
+from functools import partial
+from typing import Literal
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from dinov2.layers import Mlp
+from dinov2.layers import NestedTensorBlock as Block
+from dinov2.layers import SwiGLUFFNFused
+
 from .compvit import CompViT
-from typing import Literal
 
 
-class Mask(nn.Module):
+class MaskTokens(nn.Module):
     def __init__(self, decoder_embed_dim, num_patches) -> None:
         super().__init__()
         self.mask_token = nn.Parameter(
@@ -30,6 +38,70 @@ class Mask(nn.Module):
         return mask_tokens
 
 
+class Decoder(nn.Module):
+    def __init__(
+        self,
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        mlp_ratio=4.0,
+        qkv_bias=True,
+        ffn_bias=True,
+        proj_bias=True,
+        act_layer=nn.GELU,
+        block_fn=Block,
+        ffn_layer="mlp",
+        init_values=None,  # for layerscale: None or 0 => no layerscale
+        num_tokens=1,
+    ):
+        norm_layer = partial(nn.LayerNorm, eps=1e-6)
+
+        self.num_features = self.embed_dim = (
+            embed_dim  # num_features for consistency with other models
+        )
+        self.num_tokens = num_tokens
+        self.n_blocks = depth
+        self.num_heads = num_heads
+
+        if ffn_layer == "mlp":
+            ffn_layer = Mlp
+        elif ffn_layer == "swiglufused" or ffn_layer == "swiglu":
+            ffn_layer = SwiGLUFFNFused
+        elif ffn_layer == "identity":
+
+            def f(*args, **kwargs):
+                return nn.Identity()
+
+            ffn_layer = f
+        else:
+            raise NotImplementedError
+
+        self.blocks = nn.ModuleList(
+            [
+                block_fn(
+                    dim=embed_dim,
+                    num_heads=num_heads,
+                    mlp_ratio=mlp_ratio,
+                    qkv_bias=qkv_bias,
+                    proj_bias=proj_bias,
+                    ffn_bias=ffn_bias,
+                    norm_layer=norm_layer,
+                    act_layer=act_layer,
+                    ffn_layer=ffn_layer,
+                    init_values=init_values,
+                )
+                for i in range(depth)
+            ]
+        )
+        self.norm = norm_layer(embed_dim)
+
+    def forward(self, x):
+        for block in self.blocks:
+            x = block(x)
+        x_norm = self.norm(x)
+        return x_norm[:self.num_tokens]
+
+
 class MAECompVit(nn.Module):
     def __init__(
         self,
@@ -40,7 +112,7 @@ class MAECompVit(nn.Module):
         embed_dim,
         decoder_embed_dim,
         norm_layer,
-        loss: Literal["l2", "barlow"] = "l2",
+        loss: Literal["l2"] = "l2",
         tradeoff: float = 5e-3,
         *args,
         **kwargs
@@ -54,16 +126,6 @@ class MAECompVit(nn.Module):
 
         self.num_patches = self.encoder.total_tokens
         self.num_compressed_tokens = self.encoder.num_compressed_tokens
-
-        # MAE decoder specifics
-        # self.mask_token = nn.Parameter(
-        #     torch.zeros((1, 1, decoder_embed_dim)), requires_grad=True
-        # )
-        # self.decoder_pos_embed = nn.Parameter(
-        #     torch.zeros((1, self.num_patches, decoder_embed_dim)),
-        #     requires_grad=True,
-        # )
-        # self.mask_gen = Mask(decoder_embed_dim, self.num_patches)
 
         # Decoder Norm
         # self.decoder_norm = norm_layer(decoder_embed_dim)
@@ -90,10 +152,6 @@ class MAECompVit(nn.Module):
         # decoder_embed and decoder_pred initialization
         self._init_weights(self.decoder_embed)
         self._init_weights(self.decoder_pred)
-
-        # decoder norm init
-        # nn.init.constant_(self.decoder_norm.bias, 0)
-        # nn.init.constant_(self.decoder_norm.weight, 1.0)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -159,19 +217,17 @@ class MAECompVit(nn.Module):
 
     def forward_loss(self, baseline_outputs, decoder_outputs):
         # B, N, C = baseline_outputs.shape
-        B,C = baseline_outputs.shape
+        B, C = baseline_outputs.shape
 
         # Project decoder embed dim to baseline embed dim
         decoder_outputs = self.decoder_pred(decoder_outputs)
 
         if self.loss == "l2":
             loss = self.l2_loss(baseline_outputs, decoder_outputs)
-        elif self.loss == "barlow":
-            loss = self.barlow_loss(baseline_outputs, decoder_outputs)
         return loss
 
     def l2_loss(self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor):
-        return F.smooth_l1_loss(decoder_outputs, baseline_outputs, reduction="mean")
+        return F.mse_loss(decoder_outputs, baseline_outputs, reduction="mean")
 
     def forward(self, x, xbaseline):
         baseline_outputs = self.forward_baseline(xbaseline)
@@ -180,7 +236,7 @@ class MAECompVit(nn.Module):
 
         decoder_outputs = self.decoder_embed(encoder_outputs)
         loss = self.forward_loss(baseline_outputs, decoder_outputs)
-        
+
         # Stupid hack to make multi-gpu work without issue for Lightning
         all_params = torch.sum(torch.stack([torch.sum(p) for p in self.parameters()]))
         loss = loss + 0 * all_params
