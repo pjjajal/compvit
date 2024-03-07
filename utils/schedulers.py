@@ -16,6 +16,7 @@ class CosineAnnealingWithWarmup(optim.lr_scheduler.CosineAnnealingLR):
         warmup_epochs: int = 10,
     ) -> None:
         self.warmup_epochs = warmup_epochs
+        T_max = T_max - warmup_epochs # These are the annealing epochs.
         super().__init__(optimizer, T_max, eta_min, last_epoch, verbose)
 
     def get_lr(self) -> List[float]:
