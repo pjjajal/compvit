@@ -49,6 +49,7 @@ def mae_factory(
     decoder_conf = conf["decoder"]
 
     teacher, dino_conf = dinov2_factory(teacher_name)
+    teacher = torch.compile(teacher, mode="max-autotune", fullgraph=True)
 
     student, compvit_conf = compvit_factory(student_name)
 

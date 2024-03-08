@@ -10,10 +10,14 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as tvt
 from ffcv.loader import Loader, OrderOption
+from torch.utils.data import DataLoader
+
 from lightning.pytorch.callbacks import LearningRateMonitor
 from lightning.pytorch.loggers import WandbLogger
 from omegaconf import OmegaConf
 from torchmetrics import Accuracy
+from timm.data import Mixup
+
 
 from compvit.factory import compvit_factory
 from compvit.models.compvit import CompViT
@@ -98,6 +102,11 @@ class LightningFT(L.LightningModule):
         self.hyperparameters = hyperparameters
         self.args = args
         self.criterion = nn.CrossEntropyLoss()
+            # Mixup
+        self.mixup_fn = Mixup(
+            mixup_alpha=hyperparameters["mixup_alpha"],
+            num_classes=model.num_classes,
+        )
 
         self.running_loss = 0
         self.highest_val_accuracy = float("-inf")
@@ -110,6 +119,7 @@ class LightningFT(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, label = batch
+        x, label = self.mixup_fn(x, label)
         outputs = self.model(x)
         loss = self.criterion(outputs, label)
         # Running loss.
@@ -201,11 +211,11 @@ def main(args):
 
     # Create classifier model.
     model = LinearClassifierModel(model, head_config["num_classes"])
-
+    
     model = LightningFT(model, args, hyperparameters)
 
     # Setup W&B.
-    wandb_logger = WandbLogger(project="compvit-dt")
+    wandb_logger = WandbLogger(project="compvit-rcac")
     wandb_logger.experiment.config.update(
         {
             **config,
@@ -231,39 +241,58 @@ def main(args):
     )
 
     # Create dataset and train loader.
-    image_pipeline, label_pipeline = create_train_pipeline(
-        device=torch.device(f"cuda:{trainer.local_rank}"),
-        pretraining=False,
-        input_size=224,
-        mixup_alpha=hyperparameters["mixup_alpha"],
-        num_classes=head_config["num_classes"],
-    )
-    order = OrderOption.QUASI_RANDOM
-    loader = Loader(
-        fname=args.data_dir_train,
+    # image_pipeline, label_pipeline = create_train_pipeline(
+    #     device=torch.device(f"cuda:{trainer.local_rank}"),
+    #     pretraining=False,
+    #     input_size=224,
+    #     mixup_alpha=hyperparameters["mixup_alpha"],
+    #     num_classes=head_config["num_classes"],
+    # )
+    # order = OrderOption.QUASI_RANDOM
+    # loader = Loader(
+    #     fname=args.data_dir_train,
+    #     batch_size=hyperparameters["batch_size"],
+    #     num_workers=hyperparameters["num_workers"],
+    #     order=order,
+    #     os_cache=hyperparameters["in_memory"],
+    #     drop_last=True,
+    #     pipelines={"image": image_pipeline, "label": label_pipeline},
+    # )
+
+    # # Create test loader.
+    # test_image_pipeline, test_label_pipeline = create_val_pipeline(
+    #     device=torch.device(f"cuda:{trainer.local_rank}"),
+    #     input_size=224,
+    # )
+    # order = OrderOption.SEQUENTIAL
+    # test_loader = Loader(
+    #     fname=args.data_dir_test,
+    #     batch_size=hyperparameters["batch_size"],
+    #     num_workers=hyperparameters["num_workers"],
+    #     order=order,
+    #     os_cache=hyperparameters["in_memory"],
+    #     drop_last=False,
+    #     pipelines={"image": test_image_pipeline, "label": test_label_pipeline},
+    # )
+    # Create dataset and train loader.
+    train_dataset, test_dataset = create_dataset(args)
+    loader = DataLoader(
+        train_dataset,
         batch_size=hyperparameters["batch_size"],
+        shuffle=True,
         num_workers=hyperparameters["num_workers"],
-        order=order,
-        os_cache=hyperparameters["in_memory"],
-        drop_last=True,
-        pipelines={"image": image_pipeline, "label": label_pipeline},
+        pin_memory=True,
+        drop_last=True
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=hyperparameters["test_batch_size"],
+        shuffle=False,
+        # num_workers=2,
+        num_workers=hyperparameters["num_workers"],
     )
 
-    # Create test loader.
-    test_image_pipeline, test_label_pipeline = create_val_pipeline(
-        device=torch.device(f"cuda:{trainer.local_rank}"),
-        input_size=224,
-    )
-    order = OrderOption.SEQUENTIAL
-    test_loader = Loader(
-        fname=args.data_dir_test,
-        batch_size=hyperparameters["batch_size"],
-        num_workers=hyperparameters["num_workers"],
-        order=order,
-        os_cache=hyperparameters["in_memory"],
-        drop_last=False,
-        pipelines={"image": test_image_pipeline, "label": test_label_pipeline},
-    )
+
     # Trainer Fit.
     trainer.fit(model, train_dataloaders=loader, val_dataloaders=test_loader)
 
@@ -281,5 +310,5 @@ if __name__ == "__main__":
         save_loc.mkdir(parents=True, exist_ok=True)
 
     args.save_loc = save_loc
-    args.pretraining = True
+    args.pretraining = False
     main(args)

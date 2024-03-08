@@ -72,12 +72,14 @@ class LightningMAE(L.LightningModule):
         loss = self.model(x, self.downsize(x))
         # Running loss.
         self.running_loss += loss.detach().item()
-        self.log("train loss", loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log("train loss", loss.detach().item(), on_epoch=True, prog_bar=True, logger=True)
+        self.log("memory util", torch.cuda.memory_allocated() / torch.cuda.max_memory_allocated(), prog_bar=True, logger=True)
         return loss
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(
             self.model.training_parameters(whole=True),
+            # self.model.parameters(),
             lr=self.hyperparameters["lr"],
             weight_decay=5e-2,
         )
@@ -163,14 +165,14 @@ def main(args):
         logger=wandb_logger,
         benchmark=True,  # cudnn benchmarking, allows for faster training.
         enable_checkpointing=False, # Disable automatic checkpointing (we do this manually).
-        callbacks=[lr_monitor]
+        callbacks=[lr_monitor],
     )
 
     # Create dataset and train loader.
     image_pipeline, label_pipeline = create_train_pipeline(
         device=torch.device(f"cuda:{trainer.local_rank}"), pretraining=True, input_size=224
     )
-    order = OrderOption.QUASI_RANDOM
+    order = OrderOption.RANDOM if args.devices > 1 else OrderOption.QUASI_RANDOM
     loader = Loader(
         fname=args.data_dir,
         batch_size=hyperparameters["batch_size"],

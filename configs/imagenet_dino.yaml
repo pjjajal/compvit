@@ -1,31 +1,33 @@
 dinov2:
-  name: dinov2_vits14
+  name: dinov2_vitl14
   checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
 
 compvit:
-  name: compvits14
-  checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
+  name: compvitb14
+  # checkpoint: "/scratch/gilbreth/pjajal/dinov2_vitl14_pretrain.pth"
+  checkpoint: "/scratch/gilbreth/pjajal/checkpoints/mae_2024-03-07-221326/best_performing.pth"
 
 head:
   num_classes: 1000
-  checkpoint: "checkpoints/2024-02-22-184952/best_performing_head.pt"
+  checkpoint: ""
 
 
 hyperparameters:
-  lr: 0.5E-04
-  min_lr: 1.0e-8
+  lr: 1.0E-03
+  min_lr: 1.0e-6
   warmup_lr_scale: 1.0e-4
-  warmup_epochs: 10
-  batch_size: 64
+  warmup_epochs: 5
+  batch_size: 512
   test_batch_size: 32
-  num_workers: 16
-  epochs: 50
+  num_workers: 32
+  epochs: 150
   mixup_alpha: 0.8 
   accumulations: 1
   in_memory: False
 
 args:
   device: cuda:0
-  data_dir_train: "/home/jajal/datasets/train_500_0.5_90.ffcv"
-  data_dir_test: "/home/jajal/datasets/val_500_0.5_90.ffcv"
+  data_dir_train: "/scratch/gilbreth/pjajal/datasets/train_500_0.5_90.ffcv"
+  data_dir_test: "/scratch/gilbreth/pjajal/datasets/val_500_0.5_90.ffcv"
+  data_dir: "/scratch/gilbreth/pjajal/datasets/imagenet-1k"
   precision: "bf16-mixed"

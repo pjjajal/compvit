@@ -93,7 +93,7 @@ def create_train_pipeline(
     label_pipeline.extend(
         [
             ToTensor(),
-            MixupToOneHot(num_classes=kwargs["num_classes"]),
+            # MixupToOneHot(num_classes=kwargs["num_classes"]),
             Squeeze(),
             ToDevice(device, non_blocking=True),
         ]

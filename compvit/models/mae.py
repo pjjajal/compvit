@@ -159,6 +159,9 @@ class MAECompVit(nn.Module):
 
         parameters.extend(self.decoder_embed.parameters())
         parameters.extend(self.decoder_pred.parameters())
+        parameters.extend(self.decoder.parameters())
+        if isinstance(self.decoder, Decoder):
+            parameters.extend(self.mask_tokens.parameters())
 
         return parameters
 
@@ -194,7 +197,15 @@ class MAECompVit(nn.Module):
         return loss
 
     def l2_loss(self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor):
-        return F.mse_loss(decoder_outputs, baseline_outputs, reduction="mean")
+        mean = baseline_outputs.mean(dim=-1, keepdim=True)
+        var = baseline_outputs.var(dim=-1, keepdim=True)
+        baseline_outputs = (baseline_outputs - mean) / (var + 1.e-6)**.5
+
+        loss = (decoder_outputs - baseline_outputs) ** 2
+        loss = loss.mean(dim=-1)
+        loss = loss.mean()
+        return loss
+        # return F.mse_loss(decoder_outputs, baseline_outputs, reduction="mean")
 
     def forward(self, x, xbaseline):
         baseline_outputs = self.forward_baseline(xbaseline)
@@ -206,6 +217,6 @@ class MAECompVit(nn.Module):
         loss = self.forward_loss(baseline_outputs, decoder_outputs)
 
         # Stupid hack to make multi-gpu work without issue for Lightning
-        all_params = torch.sum(torch.stack([torch.sum(p) for p in self.parameters()]))
-        loss = loss + 0 * all_params
+        # all_params = torch.sum(torch.stack([torch.sum(p) for p in self.parameters()]))
+        # loss = loss + 0 * all_params
         return loss
