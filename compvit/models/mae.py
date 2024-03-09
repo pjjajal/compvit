@@ -232,7 +232,7 @@ class MAECompVit(nn.Module):
 
     @torch.no_grad()
     def forward_baseline_head(self, x):
-        cls_token = x[:, 0:1]
+        cls_token = x[:, 0]
         patch_tokens = x[:, 1:]
         outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
         outputs = self.baseline_head(outputs)
@@ -246,7 +246,7 @@ class MAECompVit(nn.Module):
         return encoder_outputs["x_norm"]
 
     def forward_encoder_head(self, x):
-        cls_token = x[:, 0:1]
+        cls_token = x[:, 0]
         patch_tokens = x[:, 1:]
         outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
         outputs = self.encoder_head(outputs)
@@ -257,6 +257,8 @@ class MAECompVit(nn.Module):
         # Handle non-identify decoder
         if isinstance(self.decoder, Decoder):
             encoder_outputs = self.mask_tokens(N_baseline, encoder_outputs)
+        if isinstance(self.decoder, nn.Identity):
+            return self.decoder(encoder_outputs)
         decoder_outputs = self.decoder(encoder_outputs, N_baseline)
         return decoder_outputs
 

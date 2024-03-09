@@ -13,4 +13,4 @@ tradeoff: 0.1
 use_logit: True
 num_classes: 1000
 # Path to the baseline head checkpoint. This is required when use_logit is True.
-baseline_head_checkpt: "" 
+baseline_head_checkpt: "/scratch/gilbreth/pjajal/dinov2_vitl14_linear_head.pth" 

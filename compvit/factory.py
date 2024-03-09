@@ -72,15 +72,17 @@ def mae_factory(
         )
     elif conf['loss'] == "ce" or decoder_conf['type'] == "mlp":
         decoder = DINOHead(decoder_conf["decoder_dim"], decoder_conf["decoder_dim"])
-    elif conf['use_logit']:
-        baseline_head = nn.Linear(teacher.embed_dim, conf['num_classes'])
+    else:
+        decoder = nn.Identity()
+    
+    if conf['use_logit']:
+        # 2 * embed_dim since classification will use CLS + avg. patch tokens
+        baseline_head = nn.Linear(2 * teacher.embed_dim, conf['num_classes'])
         if conf['baseline_head_checkpt']:
             baseline_head.load_state_dict(torch.load(conf['baseline_head_checkpt']))
         else:
             raise ValueError("baseline_head_checkpt is required when use_logit is True")
-        encoder_head = nn.Linear(student.embed_dim, conf['num_classes'])
-    else:
-        decoder = nn.Identity()
+        encoder_head = nn.Linear(2 * student.embed_dim, conf['num_classes'])
 
     return (
         MAECompVit(
@@ -91,6 +93,7 @@ def mae_factory(
             embed_dim=student.embed_dim,
             decoder_embed_dim=decoder_conf["decoder_dim"],
             loss=conf["loss"],
+            tradeoff=conf["tradeoff"],
             use_logit=conf['use_logit'],
             baseline_head=baseline_head,
             encoder_head=encoder_head,
