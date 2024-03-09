@@ -11,7 +11,7 @@ from dinov2.layers import NestedTensorBlock as Block
 from dinov2.layers import SwiGLUFFNFused
 
 from .compvit import CompViT
-
+from timm.layers.weight_init import trunc_normal_
 
 class MaskTokens(nn.Module):
     def __init__(self, decoder_embed_dim, num_patches) -> None:
@@ -31,6 +31,38 @@ class MaskTokens(nn.Module):
         mask_tokens = torch.cat([mask_tokens, compressed_tokens], dim=1)
         return mask_tokens
 
+class DINOHead(nn.Module):
+    def __init__(self, in_dim, out_dim, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256):
+        super().__init__()
+        nlayers = max(nlayers, 1)
+        if nlayers == 1:
+            self.mlp = nn.Linear(in_dim, bottleneck_dim)
+        else:
+            layers = [nn.Linear(in_dim, hidden_dim)]
+            layers.append(nn.GELU())
+            for _ in range(nlayers - 2):
+                layers.append(nn.Linear(hidden_dim, hidden_dim))
+                layers.append(nn.GELU())
+            layers.append(nn.Linear(hidden_dim, bottleneck_dim))
+            self.mlp = nn.Sequential(*layers)
+        self.apply(self._init_weights)
+        self.last_layer = nn.utils.weight_norm(nn.Linear(bottleneck_dim, out_dim, bias=False))
+        self.last_layer.weight_g.data.fill_(1)
+        if norm_last_layer:
+            self.last_layer.weight_g.requires_grad = False
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, x):
+        x = x[:, 0]
+        x = self.mlp(x)
+        x = nn.functional.normalize(x, dim=-1, p=2)
+        x = self.last_layer(x)
+        return x
 
 class Decoder(nn.Module):
     def __init__(
@@ -189,11 +221,15 @@ class MAECompVit(nn.Module):
         return decoder_outputs
 
     def forward_loss(self, baseline_outputs, decoder_outputs):
+        if self.loss == "ce":
+            baseline_outputs = baseline_outputs[:, 0]
         # Project decoder embed dim to baseline embed dim
         decoder_outputs = self.decoder_pred(decoder_outputs)
 
         if self.loss == "l2":
             loss = self.l2_loss(baseline_outputs, decoder_outputs)
+        elif self.loss == "ce":
+            loss = self.ce_loss(baseline_outputs, decoder_outputs)
         return loss
 
     def l2_loss(self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor):
@@ -206,6 +242,12 @@ class MAECompVit(nn.Module):
         loss = loss.mean()
         return loss
         # return F.mse_loss(decoder_outputs, baseline_outputs, reduction="mean")
+    
+    def ce_loss(self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor):
+        baseline_outputs = F.softmax(baseline_outputs, dim=-1)
+        loss = torch.sum(-baseline_outputs * F.log_softmax(decoder_outputs, dim=-1), dim=-1)
+        loss = loss.mean()
+        return loss
 
     def forward(self, x, xbaseline):
         baseline_outputs = self.forward_baseline(xbaseline)

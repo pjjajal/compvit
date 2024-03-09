@@ -14,7 +14,7 @@ from dinov2.layers import MemEffAttention
 from dinov2.layers import NestedTensorBlock as Block
 
 from .models.compvit import CompViT
-from .models.mae import MAECompVit, Decoder
+from .models.mae import MAECompVit, Decoder, DINOHead
 
 CONFIG_PATH = Path(os.path.dirname(os.path.abspath(__file__))) / "configs"
 
@@ -67,6 +67,8 @@ def mae_factory(
             ffn_layer="mlp",
             init_values=compvit_conf["init_values"],
         )
+    elif conf['loss'] == "ce" and decoder_conf['type'] == "mlp":
+        decoder = DINOHead(student.embed_dim, decoder_conf["decoder_dim"],)
     else:
         decoder = nn.Identity()
 
