@@ -138,6 +138,9 @@ class MAECompVit(nn.Module):
         decoder_embed_dim,
         loss: Literal["l2"] = "l2",
         tradeoff: float = 5e-3,
+        use_logit=True,
+        baseline_head=None,
+        encoder_head=None,
         *args,
         **kwargs
     ) -> None:
@@ -147,6 +150,7 @@ class MAECompVit(nn.Module):
         self.decoder = decoder
         self.loss = loss
         self.tradeoff = tradeoff
+        self.use_logit = use_logit
 
         self.num_patches = self.encoder.total_tokens
         self.num_compressed_tokens = self.encoder.num_compressed_tokens
@@ -159,6 +163,10 @@ class MAECompVit(nn.Module):
 
         if isinstance(self.decoder, Decoder):
             self.mask_tokens = MaskTokens(decoder_embed_dim, self.num_patches)
+
+        if self.use_logit:
+            self.baseline_head = baseline_head
+            self.encoder_head = encoder_head
 
         self.initialize_weights()
 
@@ -204,6 +212,10 @@ class MAECompVit(nn.Module):
         # patch_tokens = baseline_outputs["x_norm_patchtokens"]
         # baseline_outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
         return baseline_outputs['x_norm']
+    
+    @torch.no_grad()
+    def forward_baseline_head(self,x):
+        pass
 
     def forward_encoder(self, x):
         encoder_outputs = self.encoder.forward_features(x)
@@ -211,6 +223,9 @@ class MAECompVit(nn.Module):
         # patch_tokens = encoder_outputs["x_norm_patchtokens"]
         # encoder_outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
         return encoder_outputs['x_norm']
+    
+    def forward_encoder_head(self, x):
+        pass
 
     def forward_decoder(self, encoder_outputs, N_baseline):
         encoder_outputs = self.decoder_embed(encoder_outputs)

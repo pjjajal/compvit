@@ -81,6 +81,8 @@ def mae_factory(
             embed_dim=student.embed_dim,
             decoder_embed_dim=decoder_conf["decoder_dim"],
             loss=conf["loss"],
+            use_logit=conf['use_logit'],
+            num_classes=conf['num_classes']
         ),
         {**dino_conf, **compvit_conf, **decoder_conf},
     )
