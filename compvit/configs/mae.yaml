@@ -9,6 +9,8 @@ decoder:
   norm_first: True
   num_layers: 8
 loss: smooth
-tradeoff: 1.0e-1
+tradeoff: 0.1
 use_logit: True
 num_classes: 1000
+# Path to the baseline head checkpoint. This is required when use_logit is True.
+baseline_head_checkpt: "" 

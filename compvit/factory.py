@@ -53,6 +53,9 @@ def mae_factory(
 
     student, compvit_conf = compvit_factory(student_name)
 
+    baseline_head = None
+    encoder_head = None
+
     if decoder_conf['type'] == "transformer":
         decoder = Decoder(
             embed_dim=decoder_conf["decoder_dim"],
@@ -69,6 +72,13 @@ def mae_factory(
         )
     elif conf['loss'] == "ce" or decoder_conf['type'] == "mlp":
         decoder = DINOHead(decoder_conf["decoder_dim"], decoder_conf["decoder_dim"])
+    elif conf['use_logit']:
+        baseline_head = nn.Linear(teacher.embed_dim, conf['num_classes'])
+        if conf['baseline_head_checkpt']:
+            baseline_head.load_state_dict(torch.load(conf['baseline_head_checkpt']))
+        else:
+            raise ValueError("baseline_head_checkpt is required when use_logit is True")
+        encoder_head = nn.Linear(student.embed_dim, conf['num_classes'])
     else:
         decoder = nn.Identity()
 
@@ -82,7 +92,8 @@ def mae_factory(
             decoder_embed_dim=decoder_conf["decoder_dim"],
             loss=conf["loss"],
             use_logit=conf['use_logit'],
-            num_classes=conf['num_classes']
+            baseline_head=baseline_head,
+            encoder_head=encoder_head,
         ),
         {**dino_conf, **compvit_conf, **decoder_conf},
     )

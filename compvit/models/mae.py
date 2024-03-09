@@ -13,6 +13,7 @@ from dinov2.layers import SwiGLUFFNFused
 from .compvit import CompViT
 from timm.layers.weight_init import trunc_normal_
 
+
 class MaskTokens(nn.Module):
     def __init__(self, decoder_embed_dim, num_patches) -> None:
         super().__init__()
@@ -31,8 +32,17 @@ class MaskTokens(nn.Module):
         mask_tokens = torch.cat([mask_tokens, compressed_tokens], dim=1)
         return mask_tokens
 
+
 class DINOHead(nn.Module):
-    def __init__(self, in_dim, out_dim, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256):
+    def __init__(
+        self,
+        in_dim,
+        out_dim,
+        norm_last_layer=True,
+        nlayers=3,
+        hidden_dim=2048,
+        bottleneck_dim=256,
+    ):
         super().__init__()
         nlayers = max(nlayers, 1)
         if nlayers == 1:
@@ -46,14 +56,16 @@ class DINOHead(nn.Module):
             layers.append(nn.Linear(hidden_dim, bottleneck_dim))
             self.mlp = nn.Sequential(*layers)
         self.apply(self._init_weights)
-        self.last_layer = nn.utils.weight_norm(nn.Linear(bottleneck_dim, out_dim, bias=False))
+        self.last_layer = nn.utils.weight_norm(
+            nn.Linear(bottleneck_dim, out_dim, bias=False)
+        )
         self.last_layer.weight_g.data.fill_(1)
         if norm_last_layer:
             self.last_layer.weight_g.requires_grad = False
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
+            trunc_normal_(m.weight, std=0.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
 
@@ -63,6 +75,7 @@ class DINOHead(nn.Module):
         # x = nn.functional.normalize(x, dim=-1, p=2)
         x = self.last_layer(x)
         return x
+
 
 class Decoder(nn.Module):
     def __init__(
@@ -174,6 +187,8 @@ class MAECompVit(nn.Module):
         # decoder_embed and decoder_pred initialization
         self._init_weights(self.decoder_embed)
         self._init_weights(self.decoder_pred)
+        if self.use_logit:
+            self._init_weights(self.encoder_head)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -202,7 +217,9 @@ class MAECompVit(nn.Module):
         parameters.extend(self.decoder.parameters())
         if isinstance(self.decoder, Decoder):
             parameters.extend(self.mask_tokens.parameters())
-        
+        if self.use_logit:
+            parameters.extend(self.encoder_head.parameters())
+
         return parameters
 
     @torch.no_grad()
@@ -211,21 +228,29 @@ class MAECompVit(nn.Module):
         # cls_token = baseline_outputs["x_norm_clstoken"]
         # patch_tokens = baseline_outputs["x_norm_patchtokens"]
         # baseline_outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
-        return baseline_outputs['x_norm']
-    
+        return baseline_outputs["x_norm"]
+
     @torch.no_grad()
-    def forward_baseline_head(self,x):
-        pass
+    def forward_baseline_head(self, x):
+        cls_token = x[:, 0:1]
+        patch_tokens = x[:, 1:]
+        outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
+        outputs = self.baseline_head(outputs)
+        return outputs
 
     def forward_encoder(self, x):
         encoder_outputs = self.encoder.forward_features(x)
         # cls_token = encoder_outputs["x_norm_clstoken"]
         # patch_tokens = encoder_outputs["x_norm_patchtokens"]
         # encoder_outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
-        return encoder_outputs['x_norm']
-    
+        return encoder_outputs["x_norm"]
+
     def forward_encoder_head(self, x):
-        pass
+        cls_token = x[:, 0:1]
+        patch_tokens = x[:, 1:]
+        outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
+        outputs = self.encoder_head(outputs)
+        return outputs
 
     def forward_decoder(self, encoder_outputs, N_baseline):
         encoder_outputs = self.decoder_embed(encoder_outputs)
@@ -259,14 +284,24 @@ class MAECompVit(nn.Module):
         loss = loss.mean()
         return loss
         # return F.mse_loss(decoder_outputs, baseline_outputs, reduction="mean")
-    
-    def smooth_loss(self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor):
+
+    def smooth_loss(
+        self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor
+    ):
         return F.smooth_l1_loss(baseline_outputs, decoder_outputs)
 
     def ce_loss(self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor):
         baseline_outputs = F.softmax(baseline_outputs, dim=-1)
-        loss = torch.sum(-baseline_outputs * F.log_softmax(decoder_outputs, dim=-1), dim=-1)
+        loss = torch.sum(
+            -baseline_outputs * F.log_softmax(decoder_outputs, dim=-1), dim=-1
+        )
         loss = loss.mean()
+        return loss
+    
+    def forward_logit_loss(self, baseline_outputs, encoder_outputs):
+        baseline_outputs = self.forward_baseline_head(baseline_outputs)
+        encoder_outputs = self.forward_encoder_head(encoder_outputs)
+        loss = self.ce_loss(baseline_outputs, encoder_outputs)
         return loss
 
     def forward(self, x, xbaseline):
@@ -277,7 +312,9 @@ class MAECompVit(nn.Module):
         decoder_outputs = self.forward_decoder(encoder_outputs, N_baseline)
 
         loss = self.forward_loss(baseline_outputs, decoder_outputs)
-
+        if self.use_logit:
+            loss += self.tradeoff * self.forward_logit_loss(baseline_outputs, encoder_outputs)
+        
         # Stupid hack to make multi-gpu work without issue for Lightning
         # all_params = torch.sum(torch.stack([torch.sum(p) for p in self.parameters()]))
         # loss = loss + 0 * all_params
