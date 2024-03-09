@@ -67,8 +67,8 @@ def mae_factory(
             ffn_layer="mlp",
             init_values=compvit_conf["init_values"],
         )
-    elif conf['loss'] == "ce" and decoder_conf['type'] == "mlp":
-        decoder = DINOHead(student.embed_dim, decoder_conf["decoder_dim"],)
+    elif conf['loss'] == "ce" or decoder_conf['type'] == "mlp":
+        decoder = DINOHead(decoder_conf["decoder_dim"], decoder_conf["decoder_dim"])
     else:
         decoder = nn.Identity()
 

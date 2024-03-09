@@ -1,26 +1,27 @@
 teacher:
-  name: dinov2_vitb14
-  checkpoint: "/scratch/gilbreth/pjajal/dinov2_vitb14_pretrain.pth"
+  name: dinov2_vitl14
+  checkpoint: "/scratch/gilbreth/pjajal/dinov2_vitl14_pretrain.pth"
 
 student:
-  name: compvitb14
-  # checkpoint: "/scratch/gilbreth/pjajal/dinov2_vitb14_pretrain.pth"
-  checkpoint: "/scratch/gilbreth/pjajal/checkpoints/mae_2024-03-08-111108/best_performing.pth"
+  name: compvitl14
+  checkpoint: "/scratch/gilbreth/pjajal/dinov2_vitl14_pretrain.pth"
+  # checkpoint: "/scratch/gilbreth/pjajal/checkpoints/mae_2024-03-08-111108/best_performing.pth"
   decoder_checkpoint: ""
 
 hyperparameters:
-  lr: 1.0E-03
+  lr: 8.0E-04
   min_lr: 1.0e-6
   warmup_lr_scale: 1.0e-4
   warmup_epochs: 5
   batch_size: 512
   num_workers: 32
-  epochs: 30
+  epochs: 100
   mixup_alpha: 0.8 
-  accumulations: 16
+  accumulations: 4
   in_memory: False
 
 args:
   device: cuda:0
-  data_dir: "/scratch/gilbreth/pjajal/datasets/train_500_0.5_90.ffcv"
+  # data_dir: "/scratch/gilbreth/pjajal/datasets/train_500_0.5_90.ffcv"
+  data_dir: "/scratch/gilbreth/pjajal/datasets/train_500_0.0_90.ffcv"
   precision: "bf16-mixed"

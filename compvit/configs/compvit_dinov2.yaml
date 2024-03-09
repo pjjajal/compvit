@@ -62,7 +62,7 @@ compvitl14:
   interpolate_offset: 0.1
   # Compressor Specific
   num_patches: 256
-  num_compressed_tokens: 32
+  num_compressed_tokens: 16
   bottleneck: "mixer_bottleneck_multi_v2"
   bottleneck_locs: [5, 6]
   bottleneck_size: 2

@@ -57,10 +57,10 @@ class DINOHead(nn.Module):
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x):
+    def forward(self, x, *args):
         x = x[:, 0]
         x = self.mlp(x)
-        x = nn.functional.normalize(x, dim=-1, p=2)
+        # x = nn.functional.normalize(x, dim=-1, p=2)
         x = self.last_layer(x)
         return x
 
@@ -194,7 +194,7 @@ class MAECompVit(nn.Module):
         parameters.extend(self.decoder.parameters())
         if isinstance(self.decoder, Decoder):
             parameters.extend(self.mask_tokens.parameters())
-
+        
         return parameters
 
     @torch.no_grad()
@@ -221,7 +221,7 @@ class MAECompVit(nn.Module):
         return decoder_outputs
 
     def forward_loss(self, baseline_outputs, decoder_outputs):
-        if self.loss == "ce":
+        if self.loss == "ce" or isinstance(self.decoder, DINOHead):
             baseline_outputs = baseline_outputs[:, 0]
         # Project decoder embed dim to baseline embed dim
         decoder_outputs = self.decoder_pred(decoder_outputs)
@@ -230,12 +230,14 @@ class MAECompVit(nn.Module):
             loss = self.l2_loss(baseline_outputs, decoder_outputs)
         elif self.loss == "ce":
             loss = self.ce_loss(baseline_outputs, decoder_outputs)
+        elif self.loss == "smooth":
+            loss = self.smooth_loss(baseline_outputs, decoder_outputs)
         return loss
 
     def l2_loss(self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor):
-        mean = baseline_outputs.mean(dim=-1, keepdim=True)
-        var = baseline_outputs.var(dim=-1, keepdim=True)
-        baseline_outputs = (baseline_outputs - mean) / (var + 1.e-6)**.5
+        # mean = baseline_outputs.mean(dim=-1, keepdim=True)
+        # var = baseline_outputs.var(dim=-1, keepdim=True)
+        # baseline_outputs = (baseline_outputs - mean) / (var + 1.e-6)**.5
 
         loss = (decoder_outputs - baseline_outputs) ** 2
         loss = loss.mean(dim=-1)
@@ -243,6 +245,9 @@ class MAECompVit(nn.Module):
         return loss
         # return F.mse_loss(decoder_outputs, baseline_outputs, reduction="mean")
     
+    def smooth_loss(self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor):
+        return F.smooth_l1_loss(baseline_outputs, decoder_outputs)
+
     def ce_loss(self, baseline_outputs: torch.Tensor, decoder_outputs: torch.Tensor):
         baseline_outputs = F.softmax(baseline_outputs, dim=-1)
         loss = torch.sum(-baseline_outputs * F.log_softmax(decoder_outputs, dim=-1), dim=-1)
