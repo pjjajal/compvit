@@ -9,13 +9,15 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as tvt
+import wandb
 from ffcv.loader import Loader, OrderOption
-from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.callbacks import LearningRateMonitor
+from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.utilities import grad_norm
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
+from torch_optimizer.shampoo import Shampoo
 
-import wandb
 from compvit.factory import mae_factory
 from compvit.models.mae import MAECompVit
 from datasets import create_dataset
@@ -73,15 +75,26 @@ class LightningMAE(L.LightningModule):
         # Running loss.
         self.running_loss += loss.detach().item()
         self.log_dict(loss_dict, prog_bar=True, logger=True)
-        self.log("train loss", loss.detach().item(), on_epoch=True, prog_bar=True, logger=True)
+        self.log(
+            "train loss",
+            loss.detach().item(),
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+        )
         return loss
 
     def configure_optimizers(self):
-        optimizer = optim.AdamW(
+        # optimizer = optim.AdamW(
+        #     self.model.training_parameters(whole=True),
+        #     # self.model.parameters(),
+        #     lr=self.hyperparameters["lr"],
+        #     weight_decay=5e-2,
+        # )
+        optimizer = Shampoo(
             self.model.training_parameters(whole=True),
-            # self.model.parameters(),
             lr=self.hyperparameters["lr"],
-            weight_decay=5e-2,
+            weight_decay=3.75e-4,
         )
         return {
             "optimizer": optimizer,
@@ -105,6 +118,10 @@ class LightningMAE(L.LightningModule):
             save_path_pt = self.args.save_loc / f"best_performing_pt.pth"
             torch.save(self.model.encoder.state_dict(), save_path)
             torch.save(self.model.state_dict(), save_path_pt)
+
+    def on_before_optimizer_step(self, optimizer):
+        norms = grad_norm(self.layer, norm_type=2)
+        self.log_dict(norms)
 
 
 def main(args):
@@ -153,7 +170,7 @@ def main(args):
     )
 
     # Create lr monitor
-    lr_monitor = LearningRateMonitor(logging_interval='step')
+    lr_monitor = LearningRateMonitor(logging_interval="step")
 
     # Create trainer.
     trainer = L.Trainer(
@@ -162,15 +179,18 @@ def main(args):
         precision=args.precision,
         accumulate_grad_batches=hyperparameters["accumulations"],
         max_epochs=hyperparameters["epochs"],
+        gradient_clip_val=hyperparameters["gradient_clip_val"],
         logger=wandb_logger,
         benchmark=True,  # cudnn benchmarking, allows for faster training.
-        enable_checkpointing=False, # Disable automatic checkpointing (we do this manually).
+        enable_checkpointing=False,  # Disable automatic checkpointing (we do this manually).
         callbacks=[lr_monitor],
     )
 
     # Create dataset and train loader.
     image_pipeline, label_pipeline = create_train_pipeline(
-        device=torch.device(f"cuda:{trainer.local_rank}"), pretraining=True, input_size=224
+        device=torch.device(f"cuda:{trainer.local_rank}"),
+        pretraining=True,
+        input_size=224,
     )
     order = OrderOption.RANDOM if args.devices > 1 else OrderOption.QUASI_RANDOM
     loader = Loader(
@@ -191,11 +211,10 @@ if __name__ == "__main__":
 
     now = "mae_" + datetime.now().strftime("%Y-%m-%d-%H%M%S")
 
-        
     save_loc = DEFAULT_CHECKPOINTS_PATH / now
     if args.checkpoints_path:
         save_loc = args.checkpoints_path / now
-    
+
     if not save_loc.exists():
         save_loc.mkdir(parents=True, exist_ok=True)
 
