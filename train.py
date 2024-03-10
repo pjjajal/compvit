@@ -120,7 +120,7 @@ class LightningMAE(L.LightningModule):
             torch.save(self.model.state_dict(), save_path_pt)
 
     def on_before_optimizer_step(self, optimizer):
-        norms = grad_norm(self.layer, norm_type=2)
+        norms = grad_norm(self.model, norm_type=2)
         self.log_dict(norms)
 
 
