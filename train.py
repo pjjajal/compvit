@@ -69,11 +69,11 @@ class LightningMAE(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, y = batch
-        loss = self.model(x, self.downsize(x))
+        loss, loss_dict = self.model(x, self.downsize(x))
         # Running loss.
         self.running_loss += loss.detach().item()
+        self.log_dict(loss_dict, prog_bar=True, logger=True)
         self.log("train loss", loss.detach().item(), on_epoch=True, prog_bar=True, logger=True)
-        self.log("memory util", torch.cuda.memory_allocated() / torch.cuda.max_memory_allocated(), prog_bar=True, logger=True)
         return loss
 
     def configure_optimizers(self):

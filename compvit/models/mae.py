@@ -169,10 +169,10 @@ class MAECompVit(nn.Module):
         self.num_compressed_tokens = self.encoder.num_compressed_tokens
 
         # Linear projection from encoder embeddings to decoder embeddings
-        self.decoder_embed = nn.Linear(embed_dim, decoder_embed_dim, bias=True)
+        self.decoder_embed = nn.Linear(2 * embed_dim, decoder_embed_dim, bias=True)
 
         # Linear projection from decoder embeddings to baseline embeddings
-        self.decoder_pred = nn.Linear(decoder_embed_dim, baseline_embed_dim, bias=True)
+        self.decoder_pred = nn.Linear(decoder_embed_dim, 2 * baseline_embed_dim, bias=True)
 
         if isinstance(self.decoder, Decoder):
             self.mask_tokens = MaskTokens(decoder_embed_dim, self.num_patches)
@@ -311,13 +311,26 @@ class MAECompVit(nn.Module):
         encoder_outputs = self.forward_encoder(x)
 
         _, N_baseline, _ = baseline_outputs.shape
+
+
+        # Hacking this on for easier distillation.
+        cls_token = encoder_outputs[:, 0]
+        patch_tokens = encoder_outputs[:, 1:]
+        encoder_outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
+
+        cls_token = baseline_outputs[:, 0]
+        patch_tokens = baseline_outputs[:, 1:]
+        baseline_outputs = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
+
         decoder_outputs = self.forward_decoder(encoder_outputs, N_baseline)
 
-        loss = self.forward_loss(baseline_outputs, decoder_outputs)
+        feat_loss = self.forward_loss(baseline_outputs, decoder_outputs)
         if self.use_logit:
-            loss += self.tradeoff * self.forward_logit_loss(baseline_outputs, encoder_outputs)
+            logit_loss = self.tradeoff * self.forward_logit_loss(baseline_outputs, encoder_outputs)
+            loss = feat_loss + self.tradeoff * logit_loss
+            return loss, {"feat_loss": feat_loss.detach().item(), "logit_loss": logit_loss.detach().item(), "loss": loss.detach().item()}
         
         # Stupid hack to make multi-gpu work without issue for Lightning
         # all_params = torch.sum(torch.stack([torch.sum(p) for p in self.parameters()]))
         # loss = loss + 0 * all_params
-        return loss
+        return feat_loss, {"loss": feat_loss.detach().item()}
