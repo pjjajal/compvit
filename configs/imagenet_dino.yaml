@@ -3,9 +3,9 @@ dinov2:
   checkpoint: "dinov2/checkpoints/dinov2_vits14_pretrain.pth"
 
 compvit:
-  name: compvitb14
+  name: compvitl14
   # checkpoint: "/scratch/gilbreth/pjajal/dinov2_vitl14_pretrain.pth"
-  checkpoint: "/scratch/gilbreth/pjajal/checkpoints/mae_2024-03-07-221326/best_performing.pth"
+  checkpoint: "/scratch/gilbreth/pjajal/checkpoints/mae_2024-03-09-132303/best_performing.pth"
 
 head:
   num_classes: 1000
@@ -24,6 +24,7 @@ hyperparameters:
   mixup_alpha: 0.8 
   accumulations: 1
   in_memory: False
+  gradient_clip_val: 1.0
 
 args:
   device: cuda:0

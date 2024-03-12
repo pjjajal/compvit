@@ -238,6 +238,7 @@ def main(args):
         benchmark=True,  # cudnn benchmarking, allows for faster training.
         enable_checkpointing=False,  # Disable automatic checkpointing (we do this manually).
         callbacks=[lr_monitor],
+        gradient_clip_val=hyperparameters["gradient_clip_val"],
     )
 
     # Create dataset and train loader.

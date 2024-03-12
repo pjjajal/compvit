@@ -85,17 +85,17 @@ class LightningMAE(L.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        # optimizer = optim.AdamW(
-        #     self.model.training_parameters(whole=True),
-        #     # self.model.parameters(),
-        #     lr=self.hyperparameters["lr"],
-        #     weight_decay=5e-2,
-        # )
-        optimizer = Shampoo(
+        optimizer = optim.AdamW(
             self.model.training_parameters(whole=True),
+            # self.model.parameters(),
             lr=self.hyperparameters["lr"],
             weight_decay=3.75e-4,
         )
+        # optimizer = Shampoo(
+        #     self.model.training_parameters(whole=True),
+        #     lr=self.hyperparameters["lr"],
+        #     weight_decay=3.75e-4,
+        # )
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
@@ -119,9 +119,9 @@ class LightningMAE(L.LightningModule):
             torch.save(self.model.encoder.state_dict(), save_path)
             torch.save(self.model.state_dict(), save_path_pt)
 
-    def on_before_optimizer_step(self, optimizer):
-        norms = grad_norm(self.layer, norm_type=2)
-        self.log_dict(norms)
+    # def on_before_optimizer_step(self, optimizer):
+    #     norms = grad_norm(self.model, norm_type=2)
+    #     self.log_dict(norms)
 
 
 def main(args):

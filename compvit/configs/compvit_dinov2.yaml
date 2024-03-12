@@ -91,7 +91,7 @@ compvitg14:
   bottleneck: "conv_bottleneck"
   bottleneck_locs: [10, 11]
   bottleneck_size: 3
-  num_codebook_tokens: 384
+  num_codebook_tokens: 257
   inv_bottleneck: "inverted_mlp"
   inv_bottle_size: 1
   codebook_ratio: 4

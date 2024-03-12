@@ -4,18 +4,18 @@ teacher:
 
 student:
   name: compvitl14
-  checkpoint: "/scratch/gilbreth/pjajal/dinov2_vitl14_pretrain.pth"
-  # checkpoint: "/scratch/gilbreth/pjajal/checkpoints/mae_2024-03-08-111108/best_performing.pth"
+  # checkpoint: "/scratch/gilbreth/pjajal/dinov2_vitl14_pretrain.pth"
+  checkpoint: "/scratch/gilbreth/pjajal/checkpoints/mae_2024-03-10-170301/best_performing.pth"
   decoder_checkpoint: ""
 
 hyperparameters:
-  lr: 8.0E-04
-  min_lr: 1.0e-6
+  lr: 5.0E-04
+  min_lr: 1.0e-7
   warmup_lr_scale: 1.0e-4
   warmup_epochs: 10
   batch_size: 256
   num_workers: 32
-  epochs: 150
+  epochs: 100
   mixup_alpha: 0.8 
   accumulations: 8
   in_memory: False
