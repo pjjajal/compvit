@@ -23,8 +23,8 @@ class CrossAttention(nn.Module):
         self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
 
         # Attn dropout
-        # self.attn_drop = nn.Dropout(attn_drop)
-        self.attn_drop = attn_drop
+        self.attn_drop_prob = attn_drop
+        self.attn_drop = nn.Dropout(attn_drop)
 
         # Proj dropout
         self.proj = nn.Linear(dim, dim, bias=proj_bias)
@@ -47,14 +47,15 @@ class CrossAttention(nn.Module):
 
         q, k, v = q[0] * self.scale, kv[0], kv[1]
         
-        # attn = q @ k.transpose(-2, -1)
-        # attn = attn.softmax(dim=-1)
-        # attn = self.attn_drop(attn)
-        # x = (attn @ v).transpose(1, 2).reshape(B, Nr, Cr)
-
-        # Using optimized version of attention.
-        with torch.backends.cuda.sdp_kernel():
-            x = F.scaled_dot_product_attention(q, k, v, dropout_p=self.attn_drop).reshape(B, Nr, Cr)
+        # Use optimized version of attention when not getting attention.
+        if get_attn:
+            attn = q @ k.transpose(-2, -1)
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = (attn @ v).transpose(1, 2).reshape(B, Nr, Cr)
+        else: 
+            with torch.backends.cuda.sdp_kernel():
+                x = F.scaled_dot_product_attention(q, k, v, dropout_p=self.attn_drop_prob).reshape(B, Nr, Cr)
 
         x = self.proj(x)
         x = self.proj_drop(x)

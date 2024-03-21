@@ -201,6 +201,7 @@ def main(args):
         os_cache=hyperparameters["in_memory"],
         drop_last=True,
         pipelines={"image": image_pipeline, "label": label_pipeline},
+        # distributed= args.devices > 1,
     )
     # Trainer Fit.
     trainer.fit(model, loader)
